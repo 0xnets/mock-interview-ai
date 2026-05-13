@@ -1,0 +1,11 @@
+# Never commit the deployable file — it contains your baked-in API key
+mock-interview-deployed.html
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor configs
+.vscode/
+.idea/
+*.swp
