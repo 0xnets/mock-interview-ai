@@ -8,7 +8,7 @@ HR pastes a job description and the candidate's resume. The app generates a tail
 
 ## Tech stack
 
-- Single HTML file. No build step, no backend.
+- Vite-powered modular JavaScript app. No backend.
 - Google Gemini API for question generation and scoring (free tier covers ~100 interviews/day).
 - Web Speech API for voice in/out (browser-native).
 - PDF.js for resume PDF parsing.
@@ -18,7 +18,7 @@ HR pastes a job description and the candidate's resume. The app generates a tail
 ## Setup
 
 1. Get a free Gemini API key at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
-2. Open `mock-interview-app.html` in Chrome or Edge.
+2. Run `npm install`, then `npm run dev`, and open the local URL in Chrome or Edge.
 3. Go to **HR Configuration**, paste your API key, your email, and your behavioral question bank (one question per line under `## Category Name` headers).
 4. Go to **Deploy** tab, click **Download Deployable HTML**, drag the file onto [app.netlify.com/drop](https://app.netlify.com/drop) to host it.
 5. Restrict your Gemini API key by HTTP referrer (Google Cloud Console) so only your Netlify URL can use it.
@@ -38,6 +38,14 @@ Candidate clicks the link, clicks Start, voice-based interview begins. No setup.
 ## Browser support
 
 Use Chrome or Edge. Voice transcription is unreliable in Safari and Firefox.
+
+## Graphify
+
+This repo is configured for Graphify with Codex and Claude Code via `AGENTS.md`, `CLAUDE.md`, `.codex/hooks.json`, and `.claude/settings.json`.
+
+Graphify supports this project: it supports Codex, JavaScript/TypeScript parsing through Tree-sitter, and Python 3.10+. This machine has Python 3.14.2 and `graphifyy` 0.4.23 installed.
+
+Run `npm run graphify:update` after code changes to refresh the local knowledge graph in `graphify-out/`. The generated output is intentionally ignored by git.
 
 ## License
 

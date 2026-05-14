@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Mock Interview Platform</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+<!-- HR: This line gets replaced when you click "Generate Deployable HTML" - do NOT edit manually -->
+<script>window.EMBEDDED_KEY = "__REPLACE_ME_API_KEY__";</script>
+<link rel="stylesheet" href="./src/styles/app.css" />
+</head>
+<body class="text-gray-800">
+
+<div class="max-w-5xl mx-auto py-8 px-4">
+  <header class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">AI Mock Interview Platform</h1>
+      <p class="text-gray-600 mt-1">Verbal mock interviews for candidates — powered by AI</p>
+    </div>
+    <button id="settingsBtn" class="btn-secondary text-sm">⚙️ HR Settings</button>
+  </header>
+
+  <!-- ====== SETUP / HR ADMIN SCREEN ====== -->
+  <div id="screen-setup" class="card p-8">
+    <div class="flex gap-2 border-b border-gray-200 mb-6 flex-wrap">
+      <div class="tab active" data-tab="start">▶️ Start New Interview</div>
+      <div class="tab" data-tab="link">📨 Generate Candidate Link</div>
+      <div class="tab" data-tab="config">🔧 HR Configuration</div>
+      <div class="tab" data-tab="deploy">🚀 Deploy</div>
+      <div class="tab" data-tab="help">❓ Help</div>
+    </div>
+
+    <!-- START INTERVIEW TAB -->
+    <div id="tab-start" class="tab-content">
+      <div id="configWarning" class="hidden mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
+        ⚠️ HR Setup is not complete. Please go to <strong>HR Configuration</strong> and add your API key + non-tech questions first.
+      </div>
+
+      <h2 class="text-xl font-bold mb-4">Start a Mock Interview</h2>
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2">Candidate Name</label>
+          <input id="candidateName" class="input" placeholder="e.g., Priya Sharma" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Role / Position</label>
+          <input id="rolePosition" class="input" placeholder="e.g., Senior Backend Engineer" />
+        </div>
+      </div>
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold">Job Description (JD) — include tech stack & expectations</label>
+          <label class="text-xs text-indigo-600 cursor-pointer hover:underline">
+            📄 Upload PDF
+            <input type="file" accept="application/pdf" class="hidden" data-pdf-textarea="jdInput" data-pdf-status="jdPdfStatus" />
+          </label>
+        </div>
+        <textarea id="jdInput" class="textarea" rows="6" placeholder="Paste the JD here, or upload a PDF above..."></textarea>
+        <div id="jdPdfStatus" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold">Candidate's Resume</label>
+          <label class="text-xs text-indigo-600 cursor-pointer hover:underline">
+            📄 Upload PDF
+            <input type="file" accept="application/pdf" class="hidden" data-pdf-textarea="resumeInput" data-pdf-status="resumePdfStatus" />
+          </label>
+        </div>
+        <textarea id="resumeInput" class="textarea" rows="6" placeholder="Paste the resume here, or upload a PDF above..."></textarea>
+        <div id="resumePdfStatus" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+      <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-900">
+        <strong>📋 What happens next:</strong> The AI interviewer (US accent) will ask <span id="techCountDisplay">5</span> technical questions tailored to the JD + resume, then <span id="nonTechCountDisplay">5</span> behavioral questions. The candidate must score <strong>90% or higher</strong> to advance to the human round.
+      </div>
+      <button id="startBtn" class="btn-primary w-full text-lg">🎤 Start Interview</button>
+    </div>
+
+    <!-- GENERATE CANDIDATE LINK TAB -->
+    <div id="tab-link" class="tab-content hidden">
+      <h2 class="text-xl font-bold mb-2">Generate a Candidate Link</h2>
+      <p class="text-sm text-gray-600 mb-4">Fill in the JD and resume. The AI will pre-generate personalized questions when you click Generate (takes ~10-15 sec). You'll get a short unique URL to send the candidate — they open it, click Start, and the interview begins instantly.</p>
+
+      <div id="linkConfigWarning" class="hidden mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+        ⚠️ For employees to use these links without your help, you need to deploy a hosted version with your key baked in. Go to the <strong>Deploy</strong> tab once you're ready.
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2">Candidate Name</label>
+          <input id="linkName" class="input" placeholder="e.g., Priya Sharma" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Role / Position</label>
+          <input id="linkRole" class="input" placeholder="e.g., Senior Backend Engineer" />
+        </div>
+      </div>
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold">Job Description (JD)</label>
+          <label class="text-xs text-indigo-600 cursor-pointer hover:underline">
+            📄 Upload PDF
+            <input type="file" accept="application/pdf" class="hidden" data-pdf-textarea="linkJd" data-pdf-status="linkJdPdfStatus" />
+          </label>
+        </div>
+        <textarea id="linkJd" class="textarea" rows="5" placeholder="Paste the JD here, or upload a PDF above..."></textarea>
+        <div id="linkJdPdfStatus" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold">Candidate's Resume</label>
+          <label class="text-xs text-indigo-600 cursor-pointer hover:underline">
+            📄 Upload PDF
+            <input type="file" accept="application/pdf" class="hidden" data-pdf-textarea="linkResume" data-pdf-status="linkResumePdfStatus" />
+          </label>
+        </div>
+        <textarea id="linkResume" class="textarea" rows="5" placeholder="Paste the resume here, or upload a PDF above..."></textarea>
+        <div id="linkResumePdfStatus" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-semibold mb-2">Base URL (where you've hosted this app)</label>
+        <input id="linkBaseUrl" class="input" placeholder="https://your-app.netlify.app/" />
+        <p class="text-xs text-gray-500 mt-1">Leave blank to use the current page URL. After you deploy to Netlify, paste the hosted URL here once.</p>
+      </div>
+
+      <button class="btn-primary" id="generateLinkBtn">🔗 Generate Link</button>
+
+      <div id="generatedLinkBox" class="hidden mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+        <div class="text-sm font-semibold text-green-900 mb-2">✓ Link ready — send it to the candidate:</div>
+        <div class="flex gap-2 mb-2">
+          <input id="generatedLink" class="input bg-white text-xs" readonly />
+          <button class="btn-secondary whitespace-nowrap" id="copyLinkBtn">📋 Copy URL</button>
+        </div>
+        <p id="linkLengthInfo" class="text-xs text-green-800 mb-3"></p>
+
+        <div class="bg-white rounded p-3 border border-green-300">
+          <div class="text-xs font-semibold text-gray-700 mb-2">📤 One-click share — opens with the link pre-filled:</div>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn-secondary text-sm" id="shareEmailBtn">📧 Email</button>
+            <button class="btn-secondary text-sm" id="shareWhatsAppBtn">💬 WhatsApp</button>
+            <button class="btn-secondary text-sm" id="copyShareMessageBtn">📋 Copy Full Message (for Slack/Teams)</button>
+          </div>
+        </div>
+        <p class="text-xs text-gray-600 mt-2 italic">The URL works in any chat app or email — its length doesn't matter to recipients, only its appearance. Use the buttons above to skip writing anything yourself.</p>
+      </div>
+    </div>
+
+    <!-- DEPLOY TAB -->
+    <div id="tab-deploy" class="tab-content hidden">
+      <h2 class="text-xl font-bold mb-2">Deploy your app (one-time, ~3 min)</h2>
+      <p class="text-sm text-gray-600 mb-4">Follow these steps to host the app online so any employee can use your single key from their own browser, without setup.</p>
+
+      <ol class="list-decimal ml-5 space-y-5 text-sm">
+        <li>
+          <strong>Save your key in HR Configuration first</strong> (if you haven't already). The deploy file will use whatever key is currently saved.
+          <div id="deployKeyStatus" class="mt-2 text-xs"></div>
+        </li>
+        <li>
+          <strong>Download your deployable file:</strong>
+          <div class="mt-2"><button class="btn-primary" id="downloadDeployableBtn">⬇️ Download Deployable HTML</button></div>
+          <p class="text-xs text-gray-500 mt-1">This produces a file called <code>mock-interview-deployed.html</code> with your key baked in.</p>
+        </li>
+        <li>
+          <strong>Upload to Netlify Drop:</strong>
+          <ul class="list-disc ml-5 mt-1 space-y-1">
+            <li>Open <a href="https://app.netlify.com/drop" target="_blank" class="text-indigo-600 underline">app.netlify.com/drop</a></li>
+            <li>Drag the downloaded HTML file onto the page</li>
+            <li>You'll get a URL like <code>https://lyrical-elf-12345.netlify.app/</code> — copy it</li>
+          </ul>
+        </li>
+        <li>
+          <strong>🔒 Restrict your key (very important):</strong>
+          <ul class="list-disc ml-5 mt-1 space-y-1">
+            <li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-indigo-600 underline">console.cloud.google.com/apis/credentials</a></li>
+            <li>Click on your API key</li>
+            <li>Under <em>Application restrictions</em>, select <strong>HTTP referrers</strong></li>
+            <li>Add your Netlify URL with <code>/*</code> at the end (e.g., <code>https://lyrical-elf-12345.netlify.app/*</code>)</li>
+            <li>Save. Now your key only works when called from your Netlify page — nobody else can use it elsewhere.</li>
+          </ul>
+        </li>
+        <li>
+          <strong>Set the Base URL in the Generate Candidate Link tab</strong> to your Netlify URL. Now every candidate link points to your hosted app.
+        </li>
+        <li>
+          <strong>📧 Set up email notifications for interview reports (one-time):</strong>
+          <ul class="list-disc ml-5 mt-1 space-y-1">
+            <li>In your Netlify site dashboard, click the <strong>Forms</strong> tab in the top navigation</li>
+            <li>You'll see a form called <code>interview-result</code> (it appears after the first interview submission, or right after the first deploy with the form detected)</li>
+            <li>Click on it, then go to <strong>Settings & usage</strong> → <strong>Form notifications</strong> → <strong>Add notification</strong> → <strong>Email notification</strong></li>
+            <li>Enter the email where you want reports delivered, save</li>
+            <li>From now on, every completed interview automatically emails the report to you</li>
+          </ul>
+        </li>
+        <li>
+          <strong>You're done!</strong> Going forward, you only need the Generate Candidate Link tab. Fill in JD/resume per candidate, copy the link, send it.
+        </li>
+      </ol>
+    </div>
+
+    <!-- HR CONFIG TAB -->
+    <div id="tab-config" class="tab-content hidden">
+      <h2 class="text-xl font-bold mb-4">HR Configuration</h2>
+      <p class="text-sm text-gray-600 mb-4">Set this up once. Saved to this browser only — your API key never leaves this device.</p>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold mb-2">Google Gemini API Key <span class="text-red-500">*</span></label>
+        <input id="apiKey" type="password" class="input" placeholder="AIza..." />
+        <p class="text-xs text-gray-500 mt-1">Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-indigo-600 underline">aistudio.google.com/app/apikey</a>. Free tier covers ~100 interviews/day. No credit card required.</p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold mb-2">Your Email (for receiving interview reports)</label>
+        <input id="hrEmail" type="email" class="input" placeholder="hr@yourcompany.com" />
+        <p class="text-xs text-gray-500 mt-1">Reports will be auto-emailed to this address after every interview. Uses Netlify Forms — see the Deploy tab for the one-time setup.</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-6">
+        <div>
+          <label class="block text-sm font-semibold mb-2"># of Technical Questions</label>
+          <input id="techCount" type="number" min="3" max="10" value="5" class="input" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2"># of Non-Tech Questions to Ask</label>
+          <input id="nonTechCount" type="number" min="3" max="10" value="5" class="input" />
+          <p class="text-xs text-gray-500 mt-1">Randomly picked from your bank below.</p>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold mb-2">Non-Technical (Behavioral) Question Bank</label>
+        <p class="text-xs text-gray-500 mb-2">
+          Group questions under category headers (lines starting with <code>##</code>). The interview will pick <strong>one random question from each category</strong>. If you don't use category headers, the system falls back to picking N random questions (legacy mode).
+        </p>
+        <textarea id="nonTechBank" class="textarea font-mono text-xs" rows="14" placeholder="## Background & Experience
+Tell me about your last role and what you learned from it.
+Walk me through your career path so far.
+
+## Motivation & Intent
+Why are you interested in this role?
+What's the most exciting thing about this position to you?
+
+## Role Fit & Work Preferences
+What kind of team structure do you work best in?
+How do you prefer to receive feedback?
+
+## Work Style & Behavioural
+Describe a time you had to handle conflicting priorities.
+How do you stay productive when working remotely?
+
+## Communication & Alignment
+How do you handle disagreements with stakeholders?
+Tell me about a time you had to explain a complex idea to a non-technical person.
+
+## Problem-Solving & Thinking Process
+Walk me through how you approach a problem you've never seen before.
+Describe a time you had to make a decision with incomplete information."></textarea>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold mb-2">Passing Threshold (%)</label>
+        <input id="passThreshold" type="number" min="50" max="100" value="90" class="input w-32" />
+        <p class="text-xs text-gray-500 mt-1">Candidates need this score to advance to the human round.</p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold mb-2">Interviewer Voice</label>
+        <select id="voiceSelect" class="input"></select>
+        <button class="text-xs text-indigo-600 underline mt-1" id="testVoiceBtn">🔊 Test voice</button>
+      </div>
+
+      <button class="btn-primary" id="saveConfigBtn">💾 Save Configuration</button>
+      <span id="saveStatus" class="ml-3 text-sm text-green-600 hidden">✓ Saved</span>
+    </div>
+
+    <!-- HELP TAB -->
+    <div id="tab-help" class="tab-content hidden">
+      <h2 class="text-xl font-bold mb-4">Help & How to Share with Employees</h2>
+
+      <div class="space-y-6 text-sm leading-relaxed">
+        <details open class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">🚀 First-time setup (one-time, takes 2 min)</summary>
+          <ol class="list-decimal ml-6 mt-3 space-y-2">
+            <li>Go to <strong>HR Configuration</strong> tab.</li>
+            <li>Get a <em>free</em> Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-indigo-600 underline">aistudio.google.com/app/apikey</a> — sign in with Google, click "Create API key". No credit card needed.</li>
+            <li>Paste your key, paste your non-tech questions (one per line), and click Save.</li>
+            <li>That's it — you can now run interviews from the Start tab.</li>
+          </ol>
+        </details>
+
+        <details class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">📤 How to share with employees (recommended workflow)</summary>
+          <div class="mt-3 space-y-3">
+            <p>The cleanest workflow uses your single key for everyone, and each candidate gets a personal link that goes straight to their interview:</p>
+            <ol class="list-decimal ml-6 mt-1 space-y-1">
+              <li>Set up your key + non-tech questions in <strong>HR Configuration</strong></li>
+              <li>Go to the <strong>Deploy</strong> tab and follow the 6 steps there (one-time, ~3 min)</li>
+              <li>Now go to <strong>Generate Candidate Link</strong>, paste JD + resume for one candidate, click Generate</li>
+              <li>Copy the link, send it to that employee (email, Slack, anywhere)</li>
+              <li>The employee opens the link → goes straight to their interview, no setup on their end</li>
+            </ol>
+            <p class="text-xs text-gray-600 mt-3">All three things — your key, your non-tech questions, and the candidate's data — travel with the link or the hosted app. Employees do nothing but click and answer.</p>
+          </div>
+        </details>
+
+        <details class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">🎙️ How the interview works for the candidate</summary>
+          <ol class="list-decimal ml-6 mt-3 space-y-2">
+            <li>They enter their name, paste the JD and their resume, click Start.</li>
+            <li>Browser will ask for microphone permission — they must allow it.</li>
+            <li>The AI interviewer speaks each question aloud (US accent).</li>
+            <li>The candidate clicks 🎤 to answer verbally. Click again when done.</li>
+            <li>After all questions, they get a full report with strengths, weaknesses, action items, and a percentage score.</li>
+            <li>They can download the PDF and share it with you.</li>
+          </ol>
+        </details>
+
+        <details class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">🛠️ Troubleshooting</summary>
+          <ul class="list-disc ml-6 mt-3 space-y-2">
+            <li><strong>"Microphone not working"</strong> → Use Chrome or Edge. Firefox/Safari speech recognition is unreliable.</li>
+            <li><strong>"No US voice"</strong> → Different OS gives different voices. Pick the best US voice from the dropdown in Config and test it.</li>
+            <li><strong>"API error"</strong> → Check that the Gemini key is correct. If you hit rate limits (15 requests/min, 1500/day on free tier), wait a few minutes.</li>
+            <li><strong>Want to reset?</strong> Open browser DevTools → Application → Local Storage → clear this site's storage.</li>
+          </ul>
+        </details>
+
+        <details class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">🔒 Privacy & data</summary>
+          <p class="mt-3">Everything runs in the browser. The JD, resume, and answers are sent only to Google's Gemini API for evaluation. Nothing is stored on a server. Reports are generated locally as PDFs.</p>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== CANDIDATE WELCOME SCREEN ====== -->
+  <div id="screen-welcome" class="card p-10 hidden-screen text-center">
+    <div class="text-6xl mb-4">👋</div>
+    <h2 class="text-3xl font-bold mb-2">Welcome, <span id="welcomeName">Candidate</span></h2>
+    <p class="text-gray-600 mb-2">You're about to begin your mock interview for:</p>
+    <p class="text-lg font-semibold text-indigo-600 mb-8" id="welcomeRole">—</p>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-6 text-left max-w-xl mx-auto">
+      <h3 class="font-bold text-blue-900 mb-2">📋 Before you start:</h3>
+      <ul class="text-sm text-blue-900 space-y-1 list-disc ml-5">
+        <li>Use <strong>Chrome or Edge</strong> for the best experience</li>
+        <li>Find a <strong>quiet space</strong> — your answers will be transcribed by voice</li>
+        <li>The AI will speak each question aloud (US accent)</li>
+        <li>Click 🎤 to answer, click again when done</li>
+        <li>You'll have <span id="welcomeQuestionCount">10</span> questions in total — about <strong>20-30 min</strong></li>
+        <li>At the end, you'll get a detailed report you can download as PDF</li>
+      </ul>
+    </div>
+
+    <button id="welcomeStartBtn" class="btn-primary text-lg">🎤 I'm Ready — Start Interview</button>
+  </div>
+
+  <!-- ====== INTERVIEW SCREEN ====== -->
+  <div id="screen-interview" class="card p-8 hidden-screen">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-2xl font-bold">Interview in Progress</h2>
+        <p class="text-gray-600 text-sm" id="interviewSubtitle">Candidate: -</p>
+      </div>
+      <button class="btn-danger text-sm" id="abortInterviewBtn">✕ Cancel</button>
+    </div>
+
+    <div class="mb-6">
+      <div class="flex justify-between text-sm font-semibold mb-2">
+        <span id="sectionLabel">Section: Technical</span>
+        <span id="qProgress">Question 0 of 0</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-2">
+        <div id="progressBar" class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-50 rounded-xl p-6 mb-6 min-h-[140px] flex items-center">
+      <div class="w-full">
+        <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Interviewer asks:</div>
+        <div id="currentQuestion" class="text-lg leading-relaxed">Preparing your interview... 🔄</div>
+      </div>
+    </div>
+
+    <div class="text-center mb-6">
+      <div id="micStatus" class="text-sm text-gray-600 mb-3">Click the microphone when you're ready to answer</div>
+      <button id="micBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full w-24 h-24 text-4xl shadow-lg transition-all" disabled>🎤</button>
+      <div id="waveContainer" class="hidden mt-4">
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Your live transcript:</div>
+      <div id="transcript" class="text-sm text-gray-700 min-h-[60px] italic">—</div>
+    </div>
+
+    <div class="flex justify-between gap-3">
+      <button id="replayBtn" class="btn-secondary">🔁 Repeat Question</button>
+      <button id="submitBtn" class="btn-primary" disabled>Submit & Next →</button>
+    </div>
+  </div>
+
+  <!-- ====== RESULTS SCREEN ====== -->
+  <div id="screen-results" class="card p-8 hidden-screen">
+    <div id="resultsContent">
+      <!-- Filled dynamically -->
+    </div>
+  </div>
+
+  <!-- ====== LOADING SCREEN ====== -->
+  <div id="screen-loading" class="card p-8 hidden-screen text-center">
+    <div class="text-6xl mb-4">🤖</div>
+    <h2 class="text-2xl font-bold mb-2" id="loadingTitle">Preparing your interview...</h2>
+    <p class="text-gray-600" id="loadingSub">Analyzing the JD and resume to craft personalized questions</p>
+    <div class="mt-6 flex justify-center">
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden form that Netlify detects at deploy time. JS submits to '/' with form-name. -->
+<form name="interview-result" data-netlify="true" netlify-honeypot="bot-field" hidden>
+  <input type="text" name="bot-field" />
+  <input type="email" name="hr_email" />
+  <input type="text" name="candidate_name" />
+  <input type="text" name="role" />
+  <input type="text" name="overall_score" />
+  <input type="text" name="pass_fail" />
+  <input type="text" name="technical_score" />
+  <input type="text" name="behavioral_score" />
+  <textarea name="summary"></textarea>
+  <textarea name="strengths"></textarea>
+  <textarea name="weaknesses"></textarea>
+  <textarea name="action_items"></textarea>
+  <textarea name="full_report_json"></textarea>
+</form>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
