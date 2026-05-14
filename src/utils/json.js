@@ -37,4 +37,4 @@ export function normalizeQuestionArray(parsed) {
   throw new Error('Expected an array of questions. Got: ' + JSON.stringify(parsed).slice(0, 300));
 }
 
-// =============== EMAIL REPORT TO HR (via Netlify Forms) ===============
+// =============== EMAIL REPORT TO HR ===============

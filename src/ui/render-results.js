@@ -54,8 +54,8 @@ export function showResults() {
     ${state.session.emailResult ? `
       <div class="text-center text-xs ${state.session.emailResult.sent ? 'text-green-700' : 'text-gray-500'} mb-4">
         ${state.session.emailResult.sent
-          ? '✓ Report emailed to HR'
-          : `ℹ️ Email to HR not sent (${state.session.emailResult.reason}). Report is still visible above.`}
+          ? `✓ Report emailed to ${escapeHtml(state.session.emailResult.recipient || state.config.hrEmail)}`
+          : `ℹ️ Email to HR not sent (${escapeHtml(state.session.emailResult.reason)}). ${state.session.emailResult.fallbackStored ? 'Report submission was stored in Netlify Forms fallback. ' : ''}Report is still visible above.`}
       </div>` : ''}
 
     <div class="grid md:grid-cols-3 gap-4 mb-6">

@@ -19,6 +19,7 @@ const DEFAULT_ENV = {
   IS_GD_SHORTEN_URL: 'https://is.gd/create.php?format=simple&url=',
   DA_GD_SHORTEN_URL: 'https://da.gd/s?url=',
   URL_SHORTENER_TIMEOUT_MS: '6000',
+  REPORT_EMAIL_FUNCTION_URL: '/.netlify/functions/send-report-email',
   NETLIFY_FORM_POST_URL: '/',
   NETLIFY_FORM_NAME: 'interview-result',
   NETLIFY_HONEYPOT_FIELD: 'bot-field',

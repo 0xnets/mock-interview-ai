@@ -1,7 +1,7 @@
 {
   "name": "mock-interview-ai",
   "version": "1.0.0",
-  "description": "Static browser app for AI-powered mock interviews using Gemini, Web Speech APIs, PDF.js, jsPDF, and Netlify Forms.",
+  "description": "Static browser app for AI-powered mock interviews using Gemini, Web Speech APIs, PDF.js, jsPDF, Netlify Functions, and Resend.",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,7 +20,7 @@
     "web-speech",
     "pdfjs",
     "jspdf",
-    "netlify-forms"
+    "resend"
   ],
   "author": "",
   "license": "UNLICENSED",

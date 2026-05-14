@@ -6,7 +6,7 @@ import { extractJSON, normalizeQuestionArray } from '../utils/json.js';
 import { pickNonTechQuestions } from './non-tech-bank.js';
 import { speak } from '../voice/speech-synthesis.js';
 import { toggleMic } from '../voice/speech-recognition.js';
-import { emailReportToHR } from '../services/netlify-forms.service.js';
+import { emailReportToHR } from '../services/report-email.service.js';
 import { showResults } from '../ui/render-results.js';
 
 export async function startInterview() {
@@ -16,6 +16,7 @@ export async function startInterview() {
   const resume = document.getElementById('resumeInput').value.trim();
 
   if (!state.config.apiKey) { alert('Please set your API key in HR Configuration first.'); return; }
+  if (!state.config.hrEmail) { alert('Please set the report recipient email in HR Configuration first.'); return; }
   if (!state.config.nonTechBank) { alert('Please add non-tech questions in HR Configuration first.'); return; }
   if (!name || !role || !jd || !resume) { alert('Please fill in all fields: name, role, JD, and resume.'); return; }
 

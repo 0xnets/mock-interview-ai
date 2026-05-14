@@ -51,9 +51,19 @@ export function loadConfig() {
 }
 
 export function saveConfig() {
+  const hrEmail = document.getElementById('hrEmail').value.trim();
+  if (!hrEmail) {
+    alert('Please enter the report recipient email in HR Configuration.');
+    return;
+  }
+  if (!document.getElementById('hrEmail').checkValidity()) {
+    alert('Please enter a valid report recipient email.');
+    return;
+  }
+
   state.config = {
     apiKey: document.getElementById('apiKey').value.trim(),
-    hrEmail: document.getElementById('hrEmail').value.trim(),
+    hrEmail,
     techCount: parseInt(document.getElementById('techCount').value) || envNumber('DEFAULT_TECH_QUESTION_COUNT'),
     nonTechCount: parseInt(document.getElementById('nonTechCount').value) || envNumber('DEFAULT_NON_TECH_QUESTION_COUNT'),
     nonTechBank: document.getElementById('nonTechBank').value.trim(),
@@ -72,6 +82,6 @@ export function saveConfig() {
 
 export function checkConfig() {
   const warn = document.getElementById('configWarning');
-  const ok = state.config.apiKey && state.config.nonTechBank;
+  const ok = state.config.apiKey && state.config.hrEmail && state.config.nonTechBank;
   warn.classList.toggle('hidden', ok);
 }

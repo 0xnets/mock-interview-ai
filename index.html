@@ -190,13 +190,13 @@
           <strong>Set the Base URL in the Generate Candidate Link tab</strong> to your Netlify URL. Now every candidate link points to your hosted app.
         </li>
         <li>
-          <strong>📧 Set up email notifications for interview reports (one-time):</strong>
+          <strong>📧 Set up dynamic report email (one-time):</strong>
           <ul class="list-disc ml-5 mt-1 space-y-1">
-            <li>In your Netlify site dashboard, click the <strong>Forms</strong> tab in the top navigation</li>
-            <li>You'll see a form called <code>interview-result</code> (it appears after the first interview submission, or right after the first deploy with the form detected)</li>
-            <li>Click on it, then go to <strong>Settings & usage</strong> → <strong>Form notifications</strong> → <strong>Add notification</strong> → <strong>Email notification</strong></li>
-            <li>Enter the email where you want reports delivered, save</li>
-            <li>From now on, every completed interview automatically emails the report to you</li>
+            <li>Create a Resend API key at <a href="https://resend.com/api-keys" target="_blank" class="text-indigo-600 underline">resend.com/api-keys</a></li>
+            <li>In Netlify, open <strong>Site configuration</strong> → <strong>Environment variables</strong></li>
+            <li>Add <code>RESEND_API_KEY</code> with your Resend key</li>
+            <li>Add <code>REPORT_FROM_EMAIL</code> with a verified sender, e.g. <code>Mock Interview &lt;reports@yourdomain.com&gt;</code></li>
+            <li>Redeploy the site. From now on, every completed interview emails the report to the recipient entered in HR Configuration.</li>
           </ul>
         </li>
         <li>
@@ -217,9 +217,9 @@
       </div>
 
       <div class="mb-6">
-        <label class="block text-sm font-semibold mb-2">Your Email (for receiving interview reports)</label>
+        <label class="block text-sm font-semibold mb-2">Report Recipient Email <span class="text-red-500">*</span></label>
         <input id="hrEmail" type="email" class="input" placeholder="hr@yourcompany.com" />
-        <p class="text-xs text-gray-500 mt-1">Reports will be auto-emailed to this address after every interview. Uses Netlify Forms — see the Deploy tab for the one-time setup.</p>
+        <p class="text-xs text-gray-500 mt-1">Interview reports are emailed to this recipient after every completed interview. Uses the Resend email setup from the Deploy tab.</p>
       </div>
 
       <div class="grid md:grid-cols-2 gap-4 mb-6">
@@ -434,7 +434,7 @@ Describe a time you had to make a decision with incomplete information."></texta
   </div>
 </div>
 
-<!-- Hidden form that Netlify detects at deploy time. JS submits to '/' with form-name. -->
+<!-- Hidden fallback form that Netlify detects at deploy time. Used only if Resend email fails. -->
 <form name="interview-result" data-netlify="true" netlify-honeypot="bot-field" hidden>
   <input type="text" name="bot-field" />
   <input type="email" name="hr_email" />

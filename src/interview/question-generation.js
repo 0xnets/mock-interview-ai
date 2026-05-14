@@ -6,6 +6,7 @@ import { pickNonTechQuestions } from './non-tech-bank.js';
 
 export async function prepareCandidateSession(name, role, jd, resume, statusCallback) {
   if (!state.config.apiKey) throw new Error('API key not configured. Set it in HR Configuration.');
+  if (!state.config.hrEmail) throw new Error('Report recipient email not configured. Set it in HR Configuration.');
   if (!state.config.nonTechBank) throw new Error('Non-tech question bank is empty. Set it in HR Configuration.');
 
   statusCallback && statusCallback('🧠 Generating personalized technical questions...');

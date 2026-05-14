@@ -13,7 +13,7 @@ HR pastes a job description and the candidate's resume. The app generates a tail
 - Web Speech API for voice in/out (browser-native).
 - PDF.js for resume PDF parsing.
 - jsPDF for report generation.
-- Netlify Forms for emailing reports.
+- Netlify Functions + Resend for emailing reports to the configured HR recipient; Netlify Forms is a fallback if Resend fails.
 
 ## Setup
 
@@ -22,7 +22,7 @@ HR pastes a job description and the candidate's resume. The app generates a tail
 3. Go to **HR Configuration**, paste your API key, your email, and your behavioral question bank (one question per line under `## Category Name` headers).
 4. Go to **Deploy** tab, click **Download Deployable HTML**, drag the file onto [app.netlify.com/drop](https://app.netlify.com/drop) to host it.
 5. Restrict your Gemini API key by HTTP referrer (Google Cloud Console) so only your Netlify URL can use it.
-6. In your Netlify site dashboard, set up email notifications for the `interview-result` form.
+6. In Netlify environment variables, set `RESEND_API_KEY` and `REPORT_FROM_EMAIL`, then redeploy. `REPORT_FROM_EMAIL` must be a Resend-verified sender.
 
 ## Generating a candidate interview
 
