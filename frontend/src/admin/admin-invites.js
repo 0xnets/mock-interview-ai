@@ -10,6 +10,16 @@ export function openAdminInvites() {
   showScreen('admin-invite');
 }
 
+function formatExpiryHours(hours) {
+  const value = Number(hours);
+  if (!Number.isFinite(value)) return `${hours} hour(s)`;
+  if (value >= 24 && value % 24 === 0) {
+    const days = value / 24;
+    return `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+  return `${value} ${value === 1 ? 'hour' : 'hours'}`;
+}
+
 export async function submitCreateInvite() {
   const emailEl = document.getElementById('inviteEmail');
   const nameEl = document.getElementById('inviteDisplayName');
@@ -41,7 +51,7 @@ export async function submitCreateInvite() {
   try {
     const resp = await createInvite({ email, display_name: display_name || undefined, role });
     if (urlEl) urlEl.value = resp.accept_url;
-    if (expEl) expEl.textContent = `Expires in ${resp.expires_in_hours} hour(s).`;
+    if (expEl) expEl.textContent = `Expires in ${formatExpiryHours(resp.expires_in_hours)}.`;
     if (box) box.classList.remove('hidden');
     if (ok) ok.classList.remove('hidden');
   } catch (e) {
@@ -54,13 +64,39 @@ export async function submitCreateInvite() {
   }
 }
 
+function showCopyButtonStatus(text, restoreAfterMs = 2000) {
+  const btn = document.getElementById('copyInviteLinkBtn');
+  if (!btn) return;
+  const original = btn.dataset.originalText || btn.textContent;
+  btn.dataset.originalText = original;
+  btn.textContent = text;
+  setTimeout(() => {
+    btn.textContent = btn.dataset.originalText || original;
+  }, restoreAfterMs);
+}
+
+function copySelectedInputValue(input) {
+  input.focus();
+  input.select();
+  input.setSelectionRange(0, input.value.length);
+  return document.execCommand && document.execCommand('copy');
+}
+
 export async function copyInviteLink() {
   const urlEl = document.getElementById('inviteAcceptUrl');
   if (!urlEl || !urlEl.value) return;
   try {
-    await navigator.clipboard.writeText(urlEl.value);
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(urlEl.value);
+    } else if (!copySelectedInputValue(urlEl)) {
+      throw new Error('Clipboard copy failed.');
+    }
+    showCopyButtonStatus('✓ Copied');
   } catch {
-    urlEl.select();
-    document.execCommand && document.execCommand('copy');
+    if (copySelectedInputValue(urlEl)) {
+      showCopyButtonStatus('✓ Copied');
+    } else {
+      showCopyButtonStatus('Copy failed');
+    }
   }
 }

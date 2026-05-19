@@ -1,10 +1,10 @@
 import { acceptInvite } from '../api/client.js';
 import { showScreen } from '../ui/screens.js';
 
-/// Read `?invite=<token>` (or `?token=<token>`) from the URL.
+/// Read invite tokens from current and older invite-link query params.
 export function readInviteTokenFromUrl() {
   const sp = new URLSearchParams(window.location.search);
-  return sp.get('invite') || sp.get('token') || '';
+  return sp.get('invite') || sp.get('accept_invite') || sp.get('token') || '';
 }
 
 export function openAcceptInviteScreen() {

@@ -17,7 +17,7 @@
  * @property {number} expires_in  Seconds until the access token expires.
  * @property {string} account_id
  * @property {Role} role
- * @property {string} display_name
+ * @property {string|null} display_name
  */
 
 /**

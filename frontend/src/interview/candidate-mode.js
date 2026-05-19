@@ -21,6 +21,7 @@ export async function enterCandidateMode(loaded) {
   state.session.results = null;
   state.session.currentQuestionText = '';
   state.session.reportPdfUrl = '';
+  state.session.reportPdfError = '';
   state.session.socket = null;
 
   // Hide HR settings button — candidate must not edit config.

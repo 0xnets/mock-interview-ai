@@ -1,18 +1,16 @@
-import { saveConfig } from './config.js';
+import { addNonTechSection, cancelConfigEdit, saveConfig, showConfigEditor, updateActiveNonTechQuestions } from './config.js';
 import { switchTab } from '../ui/tabs.js';
 import { showScreen } from '../ui/screens.js';
 import { loadPdfIntoTextarea } from '../services/pdf-parser.service.js';
 import { testVoice, speakCurrentQuestion } from '../voice/speech-synthesis.js';
 import { toggleMic } from '../voice/speech-recognition.js';
 import { generateCandidateLink, copyLink } from '../candidate/candidate-link.js';
-import { shareViaEmail, shareViaWhatsApp, copyShareMessage } from '../candidate/share-message.js';
 import { startCandidateInterview } from '../interview/candidate-mode.js';
 import { startInterview, submitAnswer, abortInterview } from '../interview/interview-flow.js';
 import { state } from './state.js';
 import { attemptLogin, attemptLogout } from '../auth/auth-flow.js';
 import { submitAcceptInvite, openAcceptInviteScreen } from '../auth/accept-invite.js';
 import { openAdminInvites, submitCreateInvite, copyInviteLink } from '../admin/admin-invites.js';
-import { openTranscriptForCurrentSession } from '../transcript/transcript-viewer.js';
 
 function on(id, eventName, handler) {
   const el = document.getElementById(id);
@@ -34,11 +32,12 @@ export function attachEventHandlers() {
   on('startBtn', 'click', startInterview);
   on('generateLinkBtn', 'click', generateCandidateLink);
   on('copyLinkBtn', 'click', copyLink);
-  on('shareEmailBtn', 'click', shareViaEmail);
-  on('shareWhatsAppBtn', 'click', shareViaWhatsApp);
-  on('copyShareMessageBtn', 'click', copyShareMessage);
   on('testVoiceBtn', 'click', testVoice);
   on('saveConfigBtn', 'click', saveConfig);
+  on('addNonTechSectionBtn', 'click', addNonTechSection);
+  on('nonTechQuestionsInput', 'input', updateActiveNonTechQuestions);
+  on('editSavedConfigBtn', 'click', showConfigEditor);
+  on('cancelConfigEditBtn', 'click', cancelConfigEdit);
   on('welcomeStartBtn', 'click', startCandidateInterview);
   on('abortInterviewBtn', 'click', abortInterview);
   on('micBtn', 'click', toggleMic);
@@ -58,8 +57,6 @@ export function attachEventHandlers() {
   on('copyInviteLinkBtn', 'click', copyInviteLink);
   on('backFromAdminInviteBtn', 'click', () => showScreen('setup'));
 
-  // Transcript viewer
-  on('viewTranscriptBtn', 'click', openTranscriptForCurrentSession);
   on('backFromTranscriptBtn', 'click', () => showScreen('results'));
 
   document.addEventListener('click', event => {
@@ -70,6 +67,8 @@ export function attachEventHandlers() {
       const url = state.session.reportPdfUrl;
       if (url) {
         window.open(url, '_blank', 'noopener');
+      } else if (state.session.reportPdfError) {
+        alert(state.session.reportPdfError);
       } else {
         alert('PDF is still being generated. Please try again in a few seconds.');
       }

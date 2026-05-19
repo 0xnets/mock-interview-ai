@@ -277,7 +277,7 @@ pub async fn create_invite(
     .await?;
 
     let accept_url = format!(
-        "{}/?accept_invite={}",
+        "{}/?invite={}",
         state.cfg.web_base_url.trim_end_matches('/'),
         token
     );

@@ -107,7 +107,9 @@ impl Settings {
         let session_ttl_hours = env_i64("SESSION_TTL_HOURS", 72)?;
         let default_pass_threshold = env_i16("DEFAULT_PASS_THRESHOLD", 70)?;
         let cors_origins = env::var("CORS_ORIGINS")
-            .unwrap_or_else(|_| "http://localhost:4173,http://127.0.0.1:4173".into())
+            .unwrap_or_else(|_| {
+                "http://localhost:4173,http://127.0.0.1:4173,http://localhost:5173,http://127.0.0.1:5173".into()
+            })
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())

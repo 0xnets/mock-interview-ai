@@ -10,6 +10,11 @@ export function showResults() {
   const ringColor = passed ? ENV.RESULT_PASS_COLOR : (r.overall_percentage >= envNumber('RESULT_WARNING_SCORE_THRESHOLD') ? ENV.RESULT_WARNING_COLOR : ENV.RESULT_FAIL_COLOR);
   const circ = 2 * Math.PI * envNumber('RESULT_RING_RADIUS');
   const offset = circ - (r.overall_percentage / 100) * circ;
+  const pdfReady = Boolean(state.session.reportPdfUrl);
+  const pdfError = state.session.reportPdfError;
+  const pdfStatus = pdfReady
+    ? ''
+    : `<p class="basis-full text-center text-sm ${pdfError ? 'text-red-600' : 'text-gray-500'}">${escapeHtml(pdfError || 'PDF report is still being generated.')}</p>`;
 
   document.getElementById('resultsContent').innerHTML = `
     <div class="text-center mb-8">
@@ -89,8 +94,9 @@ export function showResults() {
     </details>
 
     <div class="flex flex-wrap gap-3 justify-center">
-      <button id="downloadPdfBtn" class="btn-primary">📄 Download PDF Report</button>
+      <button id="downloadPdfBtn" class="btn-primary" ${pdfReady ? '' : 'disabled'}>📄 Download PDF Report</button>
       <button id="newInterviewBtn" class="btn-secondary">🔄 New Interview</button>
+      ${pdfStatus}
     </div>
   `;
 }

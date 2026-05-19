@@ -55,7 +55,8 @@ pub fn router(state: AppState) -> Router {
         )
         .route(
             "/v1/sessions/by-code/{code}/join",
-            get(handlers::sessions::issue_join_nonce),
+            get(handlers::sessions::issue_join_nonce)
+                .post(handlers::sessions::issue_join_nonce),
         )
         .route("/v1/ws/interview", get(realtime::ws_handler))
         .route(

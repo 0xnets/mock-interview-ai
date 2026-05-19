@@ -1,6 +1,6 @@
 import { login, logout, refresh } from '../api/client.js';
 import { isAuthenticated, getPrincipal, hasRole, subscribe, clearSession } from '../app/auth-store.js';
-import { showScreen } from '../ui/screens.js';
+import { setActiveAuthNavButton, showScreen } from '../ui/screens.js';
 
 function setText(id, value) {
   const el = document.getElementById(id);
@@ -19,11 +19,11 @@ export function renderAuthChrome() {
   setHidden('settingsBtn', !authed);
   setHidden('authPrincipal', !authed);
   setHidden('adminInvitesBtn', !authed || !hasRole(['admin', 'super_admin']));
-  setHidden('viewTranscriptBtn', !authed);
   if (authed && p) {
     setText('authPrincipal', `${p.display_name || p.account_id} (${p.role})`);
   } else {
     setText('authPrincipal', '');
+    setActiveAuthNavButton(null);
   }
 }
 
@@ -55,6 +55,7 @@ export async function attemptLogin() {
 }
 
 export async function attemptLogout() {
+  setActiveAuthNavButton('logout');
   try {
     await logout();
   } catch {

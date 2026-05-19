@@ -27,6 +27,34 @@ export class ApiError extends Error {
   }
 }
 
+/** @param {unknown} resp */
+function normalizeLoginResponse(resp) {
+  if (!resp || typeof resp !== 'object') {
+    throw new ApiError(0, 'Invalid login response from API', resp);
+  }
+
+  const body = /** @type {Record<string, unknown>} */ (resp);
+  const expiresIn = Number(body.expires_in);
+  if (
+    typeof body.access_token !== 'string'
+    || !Number.isFinite(expiresIn)
+    || typeof body.account_id !== 'string'
+    || typeof body.role !== 'string'
+  ) {
+    throw new ApiError(0, 'Invalid login response from API', resp);
+  }
+
+  /** @type {LoginResponse} */
+  const normalized = {
+    access_token: body.access_token,
+    expires_in: expiresIn,
+    account_id: body.account_id,
+    role: /** @type {import('./types.js').Role} */ (body.role),
+    display_name: typeof body.display_name === 'string' ? body.display_name : null,
+  };
+  return normalized;
+}
+
 async function parseError(res) {
   let body = null;
   let detail = '';
@@ -80,11 +108,14 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, auth = 'opti
 /** @returns {Promise<LoginResponse>} */
 export async function login(email, password) {
   /** @type {LoginResponse} */
-  const resp = await apiFetch('/v1/auth/login', {
+  const resp = normalizeLoginResponse(await apiFetch('/v1/auth/login', {
     method: 'POST',
-    body: { email, password },
+    body: {
+      email: String(email).trim().toLowerCase(),
+      password: String(password),
+    },
     auth: 'cookie',
-  });
+  }));
   setSession(resp);
   return resp;
 }
@@ -92,10 +123,10 @@ export async function login(email, password) {
 /** @returns {Promise<RefreshResponse>} */
 export async function refresh() {
   /** @type {RefreshResponse} */
-  const resp = await apiFetch('/v1/auth/refresh', {
+  const resp = normalizeLoginResponse(await apiFetch('/v1/auth/refresh', {
     method: 'POST',
     auth: 'cookie',
-  });
+  }));
   setSession(resp);
   return resp;
 }
@@ -160,12 +191,8 @@ export async function waitForPrimed(code, { onTick, intervalMs = 1500, timeoutMs
 }
 
 /// Single-use join nonce for `WSS /v1/ws/interview?token=…`.
-/// Backend exposes this as POST per current handlers; if it ever flips to GET, change here.
 export async function issueJoinNonce(code) {
-  return apiFetch(`/v1/sessions/by-code/${encodeURIComponent(code)}/join`, {
-    method: 'POST',
-    auth: 'optional',
-  });
+  return apiFetch(`/v1/sessions/by-code/${encodeURIComponent(code)}/join`, { auth: 'optional' });
 }
 
 /// Roll the in-interview per-question grades into a final report.

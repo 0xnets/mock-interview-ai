@@ -9,7 +9,6 @@ import {
   waitForPrimed,
   issueJoinNonce,
   finalizeInterview as finalizeOnBackend,
-  reportPdfUrl,
 } from '../api/client.js';
 import { awaitReportReady } from '../reports/report-waiting.js';
 import { closeSocket, openInterviewSocket, sendMsg, sendSkip } from '../realtime/ws-client.js';
@@ -91,6 +90,7 @@ function resetSessionState({ candidateName, role }) {
   state.session.lastSection = null;
   state.session.currentQuestionText = '';
   state.session.reportPdfUrl = '';
+  state.session.reportPdfError = '';
   state.session.results = null;
 }
 
@@ -275,18 +275,17 @@ async function finalizeAndShow() {
     };
     state.session.results = results;
     state.session.reportPdfUrl = '';
+    state.session.reportPdfError = '';
 
     closeSocket(state.session.socket);
     state.session.socket = null;
 
     awaitReportReady(state.session.sessionId)
       .then(url => { state.session.reportPdfUrl = url; })
-      .catch(() => { /* error surfaced on report-waiting screen */ })
+      .catch(e => {
+        state.session.reportPdfError = e?.message || 'PDF report generation failed.';
+      })
       .finally(() => {
-        if (!state.session.reportPdfUrl) {
-          // Fall back to direct URL so the candidate can retry-open from results screen.
-          state.session.reportPdfUrl = reportPdfUrl(state.session.sessionId);
-        }
         showResults();
       });
   } catch (e) {

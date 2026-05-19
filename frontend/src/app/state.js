@@ -28,6 +28,7 @@ export const state = {
     lastSection: null,
     currentQuestionText: '',
     reportPdfUrl: '',
+    reportPdfError: '',
     results: null
   },
   voices: [],
