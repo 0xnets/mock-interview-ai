@@ -1,0 +1,32 @@
+{
+  "name": "mock-interview-ai",
+  "version": "1.0.0",
+  "description": "Vite SPA front-end for the AI mock interview platform. Talks to the Rust backend over REST + WebSocket; uses Web Speech APIs for voice and PDF.js to parse resumes.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npm run dev",
+    "dev": "vite --host 0.0.0.0 --port 4173",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "graphify:update": "graphify update .",
+    "check": "npm run check:js && npm run check:imports",
+    "check:js": "for f in $(find src -name '*.js' | sort; find scripts -name '*.cjs' | sort); do node --check \"$f\" || exit 1; done",
+    "check:imports": "node scripts/check-imports.cjs"
+  },
+  "keywords": [
+    "mock-interview",
+    "anthropic",
+    "web-speech",
+    "pdfjs",
+    "vite"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "vite": "^8.0.12"
+  }
+}

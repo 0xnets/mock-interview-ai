@@ -1,12 +1,22 @@
-# Never commit the deployable file — it contains your baked-in API key
-mock-interview-deployed.html
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/example.env
 
-# Local environment files and build artifacts
-.env
-.env.*
-!example.env
-node_modules/
-dist/
+# Backend
+target/
+backend/target/
+backend/.env
+backend/**/.env
+backend/.env.backend
+backend/.env.backend.*
+!backend/.env.backend.example
+!backend/**/example.env
+backend/.sqlx/
+
+# Knowledge graph (local-only)
 graphify-out/
 
 # OS junk

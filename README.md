@@ -1,51 +1,107 @@
 # AI Mock Interview Platform
 
-A self-contained, single-file web app that runs verbal mock interviews for candidates using Google Gemini. Built for HR teams who want a zero-friction screening step before live human interviews.
+A voice-driven mock interview platform. HR pastes a job description and the candidate's resume; the backend generates tailored technical and behavioral questions, the candidate runs through them in a browser-based voice interview, and HR receives a graded report by email.
 
-## What it does
+## Repository layout
 
-HR pastes a job description and the candidate's resume. The app generates a tailored set of technical questions (focused on the JD) plus categorized behavioral questions. The candidate gets a personal link, opens it, and a voice-based interview begins — questions are spoken aloud in a US accent, answers are transcribed via the browser's microphone. At the end the candidate sees a detailed report (strengths, weaknesses, action items, per-question scoring, overall percentage) and can download it as PDF. HR automatically receives a copy by email.
+```
+.
+├── backend/      # Rust workspace — Axum API, Postgres, Anthropic, transcript chain, server PDF
+└── frontend/    # Vite SPA — HR setup, candidate interview, transcript viewer, admin invites
+```
+
+The two halves are developed and deployed independently. The frontend talks to the backend over REST and a single WebSocket channel for the live interview.
 
 ## Tech stack
 
-- Vite-powered modular JavaScript app. No backend.
-- Google Gemini API for question generation and scoring (free tier covers ~100 interviews/day).
-- Web Speech API for voice in/out (browser-native).
-- PDF.js for resume PDF parsing.
-- jsPDF for report generation.
-- Netlify Functions + Resend for emailing reports to the configured HR recipient; Netlify Forms is a fallback if Resend fails.
+**Backend** (`backend/`)
+- Rust workspace: `domain`, `persistence`, `ai`, `api`, `transcript-verify`
+- Axum 0.8 + Tokio + sqlx 0.8 (Postgres) + optional Redis (rate limit / nonce / streams)
+- Anthropic Messages API — Sonnet 4.6 for priming/scoring/follow-ups, Haiku 4.5 for per-question grading
+- Ed25519 transcript hash chain with rotating key versions, offline `transcript-verify` CLI
+- `printpdf` server-rendered PDF report uploaded to S3-compatible storage
+- Outbox + worker pool for PDF render and Resend email dispatch
+- JWT auth with rotating refresh tokens (HttpOnly cookie), Argon2id password hashing
+- Prometheus `/metrics` on a separate listener, OTLP tracing
 
-## Setup
+**Frontend** (`frontend/`)
+- Vite ES module SPA
+- Web Speech API (browser STT + TTS)
+- PDF.js for resume upload parsing only — the report PDF is rendered server-side
+- WebSocket client for the live interview channel
+- JWT access token kept in memory; refresh handled silently via the HttpOnly cookie
 
-1. Get a free Gemini API key at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
-2. Run `npm install`, then `npm run dev`, and open the local URL in Chrome or Edge.
-3. Go to **HR Configuration**, paste your API key, your email, and your behavioral question bank (one question per line under `## Category Name` headers).
-4. Go to **Deploy** tab, click **Download Deployable HTML**, drag the file onto [app.netlify.com/drop](https://app.netlify.com/drop) to host it.
-5. Restrict your Gemini API key by HTTP referrer (Google Cloud Console) so only your Netlify URL can use it.
-6. In Netlify environment variables, set `RESEND_API_KEY` and `REPORT_FROM_EMAIL`, then redeploy. `REPORT_FROM_EMAIL` must be a Resend-verified sender.
+## Local development
 
-## Generating a candidate interview
+### 1. Start Postgres, Redis, and MinIO
 
-1. Open your hosted URL.
-2. Go to **Generate Candidate Link**, paste JD + resume (or upload PDF), enter name and role.
-3. Click Generate — the AI pre-builds questions in ~10 seconds.
-4. Copy the link and send to the candidate.
+```bash
+cd backend
+docker compose -f infra/docker-compose.yml up -d postgres redis minio
+```
 
-## Candidate experience
+### 2. Run the backend
 
-Candidate clicks the link, clicks Start, voice-based interview begins. No setup. No accounts. ~20-30 minutes. They get the report immediately; HR gets a copy by email.
+```bash
+cd backend
+cp .env.backend.example .env.backend
+# edit .env.backend — set ANTHROPIC_API_KEY, JWT_SIGNING_SECRET, S3 creds, etc.
+set -a; source .env.backend; set +a
+cargo run -p api
+```
 
-## Browser support
+The API listens on `http://localhost:8080`; `/metrics` listens on the address set by `METRICS_LISTEN_ADDR`. Migrations run automatically on boot.
 
-Use Chrome or Edge. Voice transcription is unreliable in Safari and Firefox.
+### 3. Run the frontend
 
-## Graphify
+```bash
+cd frontend
+cp example.env .env       # override APP_API_BASE_URL if your backend is elsewhere
+npm install
+npm run dev
+```
 
-This repo is configured for Graphify with Codex and Claude Code via `AGENTS.md`, `CLAUDE.md`, `.codex/hooks.json`, and `.claude/settings.json`.
+The dev server runs on `http://localhost:4173`. Open it in Chrome or Edge — Web Speech is unreliable in Safari/Firefox.
 
-Graphify supports this project: it supports Codex, JavaScript/TypeScript parsing through Tree-sitter, and Python 3.10+. This machine has Python 3.14.2 and `graphifyy` 0.4.23 installed.
+### 4. Sign in
 
-Run `npm run graphify:update` after code changes to refresh the local knowledge graph in `graphify-out/`. The generated output is intentionally ignored by git.
+The first account is bootstrapped by migration `0002_bootstrap_default_account.sql`. From there:
+
+1. The first admin signs in at the login screen.
+2. They open **Invites** and create invite links for the rest of the team.
+3. Each teammate opens their invite link, sets a password, and signs in.
+
+### 5. Run an interview
+
+1. **HR Configuration** — set the report recipient email and behavioral question bank.
+2. **Generate Candidate Link** — paste JD + resume, click Generate. The backend creates the session and primes questions in the background; the frontend polls until ready, then shows a shareable short URL.
+3. The candidate opens the link → goes through the voice interview → the backend grades each answer live, finalizes the report, renders the PDF, uploads it to S3, and emails HR.
+
+## Useful commands
+
+```bash
+# Backend
+cd backend
+cargo check --workspace
+cargo test --workspace
+cargo run -p api
+cargo run -p transcript-verify -- --verify  # offline transcript verification
+
+# Frontend
+cd frontend
+npm run check     # node --check on every .js + import resolution
+npm run build     # production bundle to frontend/dist/
+npm run preview   # serve frontend/dist/
+```
+
+## Phase status
+
+- [x] Phase 1 — Remove deploy-HTML feature, kill third-party shorteners
+- [x] Phase 2 — Backend scaffolding, `POST /v1/interviews`, shortcodes, candidate payload endpoint
+- [x] Phase 3 — Server-side AI (Anthropic), async priming, `POST /v1/interviews/{id}/finalize`
+- [x] Phase 4 — WebSocket realtime, AI follow-ups on technicals, per-question grading worker
+- [x] Phase 5 — Transcript hash chain + checkpoint signing, server-rendered PDF on S3, backend mailer worker, event outbox
+- [x] Phase 6 — JWT auth + invites, rate limits, audit log, Prometheus + OTLP, Redis backplane (nonce / outbox / WS locks)
 
 ## License
 

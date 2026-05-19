@@ -1,0 +1,60 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/domain",
+    "crates/persistence",
+    "crates/ai",
+    "crates/api",
+    "crates/transcript-verify",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+authors = ["mock-interview-ai contributors"]
+
+[workspace.dependencies]
+tokio = { version = "1.40", features = ["full"] }
+axum = { version = "0.8", features = ["ws", "macros"] }
+axum-extra = { version = "0.10", features = ["cookie"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "chrono", "uuid", "json", "migrate"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+dotenvy = "0.15"
+rand = "0.8"
+async-trait = "0.1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
+sha2 = "0.10"
+ed25519-dalek = { version = "2", features = ["rand_core", "pkcs8", "pem"] }
+hex = "0.4"
+base64 = "0.22"
+printpdf = "0.7"
+rust-s3 = { version = "0.34", default-features = false, features = ["tokio-rustls-tls"] }
+# Phase 6 additions
+jsonwebtoken = "9"
+argon2 = "0.5"
+redis = { version = "0.27", default-features = false, features = ["tokio-rustls-comp", "connection-manager", "streams", "script", "cluster-async"] }
+opentelemetry = { version = "0.27", features = ["trace"] }
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio", "trace"] }
+opentelemetry-otlp = { version = "0.27", default-features = false, features = ["grpc-tonic", "trace"] }
+tracing-opentelemetry = "0.28"
+prometheus = "0.13"
+metrics = "0.23"
+metrics-exporter-prometheus = { version = "0.15", default-features = false }
+once_cell = "1"
+time = "0.3"
+futures-util = "0.3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

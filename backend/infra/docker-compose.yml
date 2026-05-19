@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mockinterview-postgres
+    environment:
+      POSTGRES_USER: mockinterview
+      POSTGRES_PASSWORD: mockinterview
+      POSTGRES_DB: mockinterview
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mockinterview -d mockinterview"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: mockinterview-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: mockinterview-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: mockinterview
+      MINIO_ROOT_PASSWORD: mockinterview-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Phase 6: OpenTelemetry Collector receives OTLP from the api binary and
+  # forwards to whatever backend the dev wants to point it at (Tempo, Honeycomb,
+  # Jaeger, …). The default config exports to stdout so traces are visible in
+  # `docker logs`.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    container_name: mockinterview-otel
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    depends_on:
+      - postgres
+
+  # Phase 6: scrapes the API's /metrics endpoint on :9090. The compose-level
+  # port 9091 keeps it from clashing with the api binary if you happen to run
+  # both on the host.
+  prometheus:
+    image: prom/prometheus:v3.0.0
+    container_name: mockinterview-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "9091:9090"
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  promdata:

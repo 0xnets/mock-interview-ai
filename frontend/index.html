@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Mock Interview Platform</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+<link rel="stylesheet" href="./src/styles/app.css" />
+</head>
+<body class="text-gray-800">
+
+<div class="max-w-5xl mx-auto py-8 px-4">
+  <header class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">AI Mock Interview Platform</h1>
+      <p class="text-gray-600 mt-1">Verbal mock interviews for candidates — powered by AI</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="authPrincipal" class="text-xs text-gray-600 hidden"></span>
+      <button id="adminInvitesBtn" class="btn-secondary text-sm hidden">👥 Invites</button>
+      <button id="viewTranscriptBtn" class="btn-secondary text-sm hidden">📄 Transcript</button>
+      <button id="settingsBtn" class="btn-secondary text-sm">⚙️ HR Settings</button>
+      <button id="logoutBtn" class="btn-secondary text-sm hidden">🚪 Logout</button>
+    </div>
+  </header>
+
+  <!-- ====== SETUP / HR ADMIN SCREEN ====== -->
+  <div id="screen-setup" class="card p-8">
+    <div class="flex gap-2 border-b border-gray-200 mb-6 flex-wrap">
+      <div class="tab active" data-tab="start">▶️ Start New Interview</div>
+      <div class="tab" data-tab="link">📨 Generate Candidate Link</div>
+      <div class="tab" data-tab="config">🔧 HR Configuration</div>
+      <div class="tab" data-tab="help">❓ Help</div>
+    </div>
+
+    <!-- START INTERVIEW TAB -->
+    <div id="tab-start" class="tab-content">
+      <div id="configWarning" class="hidden mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
+        ⚠️ HR Setup is not complete. Please go to <strong>HR Configuration</strong> and add the report recipient email + non-tech questions first.
+      </div>
+
+      <h2 class="text-xl font-bold mb-4">Start a Mock Interview</h2>
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2">Candidate Name</label>
+          <input id="candidateName" class="input" placeholder="e.g., Priya Sharma" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Role / Position</label>
+          <input id="rolePosition" class="input" placeholder="e.g., Senior Backend Engineer" />
+        </div>
+      </div>
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold">Job Description (JD) — include tech stack & expectations</label>
+          <label class="text-xs text-indigo-600 cursor-pointer hover:underline">
+            📄 Upload PDF
+            <input type="file" accept="application/pdf" class="hidden" data-pdf-textarea="jdInput" data-pdf-status="jdPdfStatus" />
+          </label>
+        </div>
+        <textarea id="jdInput" class="textarea" rows="6" placeholder="Paste the JD here, or upload a PDF above..."></textarea>
+        <div id="jdPdfStatus" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold">Candidate's Resume</label>
+          <label class="text-xs text-indigo-600 cursor-pointer hover:underline">
+            📄 Upload PDF
+            <input type="file" accept="application/pdf" class="hidden" data-pdf-textarea="resumeInput" data-pdf-status="resumePdfStatus" />
+          </label>
+        </div>
+        <textarea id="resumeInput" class="textarea" rows="6" placeholder="Paste the resume here, or upload a PDF above..."></textarea>
+        <div id="resumePdfStatus" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+      <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-900">
+        <strong>📋 What happens next:</strong> The AI interviewer (US accent) will ask <span id="techCountDisplay">5</span> technical questions tailored to the JD + resume, then <span id="nonTechCountDisplay">5</span> behavioral questions. The candidate must score <strong>90% or higher</strong> to advance to the human round.
+      </div>
+      <button id="startBtn" class="btn-primary w-full text-lg">🎤 Start Interview</button>
+    </div>
+
+    <!-- GENERATE CANDIDATE LINK TAB -->
+    <div id="tab-link" class="tab-content hidden">
+      <h2 class="text-xl font-bold mb-2">Generate a Candidate Link</h2>
+      <p class="text-sm text-gray-600 mb-4">Fill in the JD and resume. The AI will pre-generate personalized questions when you click Generate (takes ~10-15 sec). You'll get a short unique URL to send the candidate — they open it, click Start, and the interview begins instantly.</p>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2">Candidate Name</label>
+          <input id="linkName" class="input" placeholder="e.g., Priya Sharma" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Role / Position</label>
+          <input id="linkRole" class="input" placeholder="e.g., Senior Backend Engineer" />
+        </div>
+      </div>
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold">Job Description (JD)</label>
+          <label class="text-xs text-indigo-600 cursor-pointer hover:underline">
+            📄 Upload PDF
+            <input type="file" accept="application/pdf" class="hidden" data-pdf-textarea="linkJd" data-pdf-status="linkJdPdfStatus" />
+          </label>
+        </div>
+        <textarea id="linkJd" class="textarea" rows="5" placeholder="Paste the JD here, or upload a PDF above..."></textarea>
+        <div id="linkJdPdfStatus" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-semibold">Candidate's Resume</label>
+          <label class="text-xs text-indigo-600 cursor-pointer hover:underline">
+            📄 Upload PDF
+            <input type="file" accept="application/pdf" class="hidden" data-pdf-textarea="linkResume" data-pdf-status="linkResumePdfStatus" />
+          </label>
+        </div>
+        <textarea id="linkResume" class="textarea" rows="5" placeholder="Paste the resume here, or upload a PDF above..."></textarea>
+        <div id="linkResumePdfStatus" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+
+      <button class="btn-primary" id="generateLinkBtn">🔗 Generate Link</button>
+
+      <div id="generatedLinkBox" class="hidden mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+        <div class="text-sm font-semibold text-green-900 mb-2">✓ Link ready — send it to the candidate:</div>
+        <div class="flex gap-2 mb-2">
+          <input id="generatedLink" class="input bg-white text-xs" readonly />
+          <button class="btn-secondary whitespace-nowrap" id="copyLinkBtn">📋 Copy URL</button>
+        </div>
+        <p id="linkLengthInfo" class="text-xs text-green-800 mb-3"></p>
+
+        <div class="bg-white rounded p-3 border border-green-300">
+          <div class="text-xs font-semibold text-gray-700 mb-2">📤 One-click share — opens with the link pre-filled:</div>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn-secondary text-sm" id="shareEmailBtn">📧 Email</button>
+            <button class="btn-secondary text-sm" id="shareWhatsAppBtn">💬 WhatsApp</button>
+            <button class="btn-secondary text-sm" id="copyShareMessageBtn">📋 Copy Full Message (for Slack/Teams)</button>
+          </div>
+        </div>
+        <p class="text-xs text-gray-600 mt-2 italic">The URL works in any chat app or email — its length doesn't matter to recipients, only its appearance. Use the buttons above to skip writing anything yourself.</p>
+      </div>
+    </div>
+
+    <!-- HR CONFIG TAB -->
+    <div id="tab-config" class="tab-content hidden">
+      <h2 class="text-xl font-bold mb-4">HR Configuration</h2>
+      <p class="text-sm text-gray-600 mb-4">Set this up once. Saved to this browser. AI keys live on the backend now — you no longer need to paste one here.</p>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold mb-2">Report Recipient Email <span class="text-red-500">*</span></label>
+        <input id="hrEmail" type="email" class="input" placeholder="hr@yourcompany.com" />
+        <p class="text-xs text-gray-500 mt-1">Interview reports are emailed to this recipient after every completed interview.</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-6">
+        <div>
+          <label class="block text-sm font-semibold mb-2"># of Technical Questions</label>
+          <input id="techCount" type="number" min="3" max="10" value="5" class="input" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2"># of Non-Tech Questions to Ask</label>
+          <input id="nonTechCount" type="number" min="3" max="10" value="5" class="input" />
+          <p class="text-xs text-gray-500 mt-1">Randomly picked from your bank below.</p>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold mb-2">Non-Technical (Behavioral) Question Bank</label>
+        <p class="text-xs text-gray-500 mb-2">
+          Group questions under category headers (lines starting with <code>##</code>). The interview will pick <strong>one random question from each category</strong>. If you don't use category headers, the system falls back to picking N random questions (legacy mode).
+        </p>
+        <textarea id="nonTechBank" class="textarea font-mono text-xs" rows="14" placeholder="## Background & Experience
+Tell me about your last role and what you learned from it.
+Walk me through your career path so far.
+
+## Motivation & Intent
+Why are you interested in this role?
+What's the most exciting thing about this position to you?
+
+## Role Fit & Work Preferences
+What kind of team structure do you work best in?
+How do you prefer to receive feedback?
+
+## Work Style & Behavioural
+Describe a time you had to handle conflicting priorities.
+How do you stay productive when working remotely?
+
+## Communication & Alignment
+How do you handle disagreements with stakeholders?
+Tell me about a time you had to explain a complex idea to a non-technical person.
+
+## Problem-Solving & Thinking Process
+Walk me through how you approach a problem you've never seen before.
+Describe a time you had to make a decision with incomplete information."></textarea>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold mb-2">Passing Threshold (%)</label>
+        <input id="passThreshold" type="number" min="50" max="100" value="90" class="input w-32" />
+        <p class="text-xs text-gray-500 mt-1">Candidates need this score to advance to the human round.</p>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold mb-2">Interviewer Voice</label>
+        <select id="voiceSelect" class="input"></select>
+        <button class="text-xs text-indigo-600 underline mt-1" id="testVoiceBtn">🔊 Test voice</button>
+      </div>
+
+      <button class="btn-primary" id="saveConfigBtn">💾 Save Configuration</button>
+      <span id="saveStatus" class="ml-3 text-sm text-green-600 hidden">✓ Saved</span>
+    </div>
+
+    <!-- HELP TAB -->
+    <div id="tab-help" class="tab-content hidden">
+      <h2 class="text-xl font-bold mb-4">Help & How to Share with Employees</h2>
+
+      <div class="space-y-6 text-sm leading-relaxed">
+        <details open class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">🚀 First-time setup (one-time, takes 2 min)</summary>
+          <ol class="list-decimal ml-6 mt-3 space-y-2">
+            <li>Go to <strong>HR Configuration</strong> tab.</li>
+            <li>Enter the report recipient email and paste your non-tech questions (one per line, or group under <code>## Topic</code> headers).</li>
+            <li>Click Save. You're done — AI keys live on the backend now, no per-browser key to manage.</li>
+          </ol>
+        </details>
+
+        <details class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">📤 How to share with employees (recommended workflow)</summary>
+          <div class="mt-3 space-y-3">
+            <ol class="list-decimal ml-6 mt-1 space-y-1">
+              <li>Set up the recipient email + non-tech questions in <strong>HR Configuration</strong></li>
+              <li>Go to <strong>Generate Candidate Link</strong>, paste JD + resume for one candidate, click Generate</li>
+              <li>The backend generates personalized questions in the background. Copy the short link, send it to the candidate (email, Slack, anywhere)</li>
+              <li>The candidate opens the link → goes straight to their interview, no setup on their end</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">🎙️ How the interview works for the candidate</summary>
+          <ol class="list-decimal ml-6 mt-3 space-y-2">
+            <li>They enter their name, paste the JD and their resume, click Start.</li>
+            <li>Browser will ask for microphone permission — they must allow it.</li>
+            <li>The AI interviewer speaks each question aloud (US accent).</li>
+            <li>The candidate clicks 🎤 to answer verbally. Click again when done.</li>
+            <li>After all questions, they get a full report with strengths, weaknesses, action items, and a percentage score.</li>
+            <li>They can download the PDF and share it with you.</li>
+          </ol>
+        </details>
+
+        <details class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">🛠️ Troubleshooting</summary>
+          <ul class="list-disc ml-6 mt-3 space-y-2">
+            <li><strong>"Microphone not working"</strong> → Use Chrome or Edge. Firefox/Safari speech recognition is unreliable.</li>
+            <li><strong>"No US voice"</strong> → Different OS gives different voices. Pick the best US voice from the dropdown in Config and test it.</li>
+            <li><strong>"API error"</strong> → Means the backend couldn't reach Anthropic or the request was rejected. Check the API server logs.</li>
+            <li><strong>Want to reset?</strong> Open browser DevTools → Application → Local Storage → clear this site's storage.</li>
+          </ul>
+        </details>
+
+        <details class="p-4 bg-gray-50 rounded-lg">
+          <summary class="font-semibold text-base">🔒 Privacy & data</summary>
+          <p class="mt-3">JD, resume, and answers are stored on the backend and sent only to Anthropic for question generation and scoring. The candidate's short link contains no personal data — only an opaque session code that resolves server-side. Reports are produced by the backend.</p>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== CANDIDATE WELCOME SCREEN ====== -->
+  <div id="screen-welcome" class="card p-10 hidden-screen text-center">
+    <div class="text-6xl mb-4">👋</div>
+    <h2 class="text-3xl font-bold mb-2">Welcome, <span id="welcomeName">Candidate</span></h2>
+    <p class="text-gray-600 mb-2">You're about to begin your mock interview for:</p>
+    <p class="text-lg font-semibold text-indigo-600 mb-8" id="welcomeRole">—</p>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-6 text-left max-w-xl mx-auto">
+      <h3 class="font-bold text-blue-900 mb-2">📋 Before you start:</h3>
+      <ul class="text-sm text-blue-900 space-y-1 list-disc ml-5">
+        <li>Use <strong>Chrome or Edge</strong> for the best experience</li>
+        <li>Find a <strong>quiet space</strong> — your answers will be transcribed by voice</li>
+        <li>The AI will speak each question aloud (US accent)</li>
+        <li>Click 🎤 to answer, click again when done</li>
+        <li>You'll have <span id="welcomeQuestionCount">10</span> questions in total — about <strong>20-30 min</strong></li>
+        <li>At the end, you'll get a detailed report you can download as PDF</li>
+      </ul>
+    </div>
+
+    <button id="welcomeStartBtn" class="btn-primary text-lg">🎤 I'm Ready — Start Interview</button>
+  </div>
+
+  <!-- ====== INTERVIEW SCREEN ====== -->
+  <div id="screen-interview" class="card p-8 hidden-screen">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-2xl font-bold">Interview in Progress</h2>
+        <p class="text-gray-600 text-sm" id="interviewSubtitle">Candidate: -</p>
+      </div>
+      <button class="btn-danger text-sm" id="abortInterviewBtn">✕ Cancel</button>
+    </div>
+
+    <div class="mb-6">
+      <div class="flex justify-between text-sm font-semibold mb-2">
+        <span id="sectionLabel">Section: Technical</span>
+        <span id="qProgress">Question 0 of 0</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-2">
+        <div id="progressBar" class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-50 rounded-xl p-6 mb-6 min-h-[140px] flex items-center">
+      <div class="w-full">
+        <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Interviewer asks:</div>
+        <div id="currentQuestion" class="text-lg leading-relaxed">Preparing your interview... 🔄</div>
+      </div>
+    </div>
+
+    <div class="text-center mb-6">
+      <div id="micStatus" class="text-sm text-gray-600 mb-3">Click the microphone when you're ready to answer</div>
+      <button id="micBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full w-24 h-24 text-4xl shadow-lg transition-all" disabled>🎤</button>
+      <div id="waveContainer" class="hidden mt-4">
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Your live transcript:</div>
+      <div id="transcript" class="text-sm text-gray-700 min-h-[60px] italic">—</div>
+    </div>
+
+    <div class="flex justify-between gap-3">
+      <button id="replayBtn" class="btn-secondary">🔁 Repeat Question</button>
+      <button id="submitBtn" class="btn-primary" disabled>Submit & Next →</button>
+    </div>
+  </div>
+
+  <!-- ====== RESULTS SCREEN ====== -->
+  <div id="screen-results" class="card p-8 hidden-screen">
+    <div id="resultsContent">
+      <!-- Filled dynamically -->
+    </div>
+  </div>
+
+  <!-- ====== LOGIN SCREEN ====== -->
+  <div id="screen-login" class="card p-8 hidden-screen max-w-md mx-auto">
+    <h2 class="text-2xl font-bold mb-4">HR Sign in</h2>
+    <div class="mb-4">
+      <label class="block text-sm font-semibold mb-2">Email</label>
+      <input id="loginEmail" type="email" class="input" autocomplete="username" />
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-semibold mb-2">Password</label>
+      <input id="loginPassword" type="password" class="input" autocomplete="current-password" />
+    </div>
+    <button id="loginBtn" class="btn-primary w-full">Sign in</button>
+    <p id="loginError" class="text-sm text-red-600 mt-3 hidden"></p>
+    <p class="text-xs text-gray-500 mt-4">
+      Have an invite?
+      <button id="toggleAcceptInviteBtn" type="button" class="text-indigo-600 underline">Set up your account →</button>
+    </p>
+  </div>
+
+  <!-- ====== ACCEPT-INVITE SCREEN ====== -->
+  <div id="screen-accept-invite" class="card p-8 hidden-screen max-w-md mx-auto">
+    <h2 class="text-2xl font-bold mb-4">Set up your account</h2>
+    <p class="text-sm text-gray-600 mb-4">Choose a password to finish accepting your invite.</p>
+    <div class="mb-4">
+      <label class="block text-sm font-semibold mb-2">Invite token</label>
+      <input id="acceptInviteToken" type="text" class="input" placeholder="Paste the token from your invite email" autocomplete="off" />
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-semibold mb-2">New Password</label>
+      <input id="acceptPassword" type="password" class="input" autocomplete="new-password" />
+      <p class="text-xs text-gray-500 mt-1">Minimum 12 characters.</p>
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-semibold mb-2">Confirm Password</label>
+      <input id="acceptPasswordConfirm" type="password" class="input" autocomplete="new-password" />
+    </div>
+    <button id="acceptInviteBtn" class="btn-primary w-full">Accept invite</button>
+    <p id="acceptInviteError" class="text-sm text-red-600 mt-3 hidden"></p>
+    <p id="acceptInviteSuccess" class="text-sm text-green-600 mt-3 hidden">✓ Account set up — redirecting to sign in…</p>
+    <button id="backToLoginBtn" type="button" class="text-xs text-indigo-600 underline mt-4">← Back to sign in</button>
+  </div>
+
+  <!-- ====== ADMIN INVITE SCREEN ====== -->
+  <div id="screen-admin-invite" class="card p-8 hidden-screen max-w-xl mx-auto">
+    <h2 class="text-2xl font-bold mb-4">Invite a teammate</h2>
+    <div class="grid md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-semibold mb-2">Email <span class="text-red-500">*</span></label>
+        <input id="inviteEmail" type="email" class="input" placeholder="teammate@yourcompany.com" />
+      </div>
+      <div>
+        <label class="block text-sm font-semibold mb-2">Display Name</label>
+        <input id="inviteDisplayName" type="text" class="input" placeholder="Jane Doe" />
+      </div>
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-semibold mb-2">Role</label>
+      <select id="inviteRole" class="input">
+        <option value="hr">HR</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <button id="createInviteBtn" class="btn-primary">Create invite</button>
+    <span id="createInviteStatus" class="ml-3 text-sm text-green-600 hidden">✓ Created</span>
+    <div id="inviteResultBox" class="hidden mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+      <div class="text-sm font-semibold text-green-900 mb-2">Share this accept link with the invitee:</div>
+      <div class="flex gap-2 mb-2">
+        <input id="inviteAcceptUrl" class="input bg-white text-xs" readonly />
+        <button class="btn-secondary whitespace-nowrap" id="copyInviteLinkBtn">📋 Copy</button>
+      </div>
+      <p class="text-xs text-green-800" id="inviteExpiryNote"></p>
+    </div>
+    <p id="createInviteError" class="text-sm text-red-600 mt-3 hidden"></p>
+    <div class="mt-6">
+      <button id="backFromAdminInviteBtn" class="btn-secondary text-sm">← Back</button>
+    </div>
+  </div>
+
+  <!-- ====== TRANSCRIPT VIEWER SCREEN ====== -->
+  <div id="screen-transcript" class="card p-8 hidden-screen">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-2xl font-bold">Signed Transcript</h2>
+      <button id="backFromTranscriptBtn" class="btn-secondary text-sm">← Back</button>
+    </div>
+    <p class="text-sm text-gray-600 mb-4">
+      Chain-hashed transcript export. <span id="transcriptChainStatus"></span>
+    </p>
+    <div class="mb-4 text-xs text-gray-500">
+      <span>Session: <code id="transcriptSessionId"></code></span> ·
+      <span>Public key (base64): <code id="transcriptPublicKey" class="break-all"></code></span>
+    </div>
+    <div id="transcriptChunks" class="space-y-3 mb-6"></div>
+    <h3 class="text-lg font-semibold mt-6 mb-2">Checkpoints</h3>
+    <div id="transcriptCheckpoints" class="space-y-2 text-xs font-mono"></div>
+    <p id="transcriptError" class="text-sm text-red-600 mt-3 hidden"></p>
+  </div>
+
+  <!-- ====== REPORT-WAITING SCREEN ====== -->
+  <div id="screen-report-waiting" class="card p-8 hidden-screen text-center">
+    <div class="text-6xl mb-4">📝</div>
+    <h2 class="text-2xl font-bold mb-2">Generating your report…</h2>
+    <p class="text-gray-600 mb-4" id="reportWaitingSub">Rendering PDF and emailing HR. This usually takes a few seconds.</p>
+    <p class="text-sm text-gray-500" id="reportWaitingStatus">PDF: pending · Mail: pending</p>
+    <p id="reportWaitingError" class="text-sm text-red-600 mt-3 hidden"></p>
+  </div>
+
+  <!-- ====== LOADING SCREEN ====== -->
+  <div id="screen-loading" class="card p-8 hidden-screen text-center">
+    <div class="text-6xl mb-4">🤖</div>
+    <h2 class="text-2xl font-bold mb-2" id="loadingTitle">Preparing your interview...</h2>
+    <p class="text-gray-600" id="loadingSub">Analyzing the JD and resume to craft personalized questions</p>
+    <div class="mt-6 flex justify-center">
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+# Minimal OTEL Collector config for local dev. Exports traces to stdout so
+# they're visible via `docker compose logs otel-collector`. Swap the exporter
+# for OTLP-HTTP / Honeycomb / Tempo / Jaeger in real deploys.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
