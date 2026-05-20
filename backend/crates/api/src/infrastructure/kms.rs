@@ -19,7 +19,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 
 use crate::config::Settings;
-use crate::signing::TranscriptSigner;
+use crate::infrastructure::signing::TranscriptSigner;
 
 #[async_trait]
 pub trait CheckpointSigner: Send + Sync {

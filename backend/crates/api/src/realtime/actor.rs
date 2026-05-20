@@ -20,7 +20,7 @@ use crate::config::Settings;
 use crate::realtime::followup;
 use crate::realtime::grade;
 use crate::realtime::protocol::{ClientMsg, ServerMsg};
-use crate::signing::TranscriptSigner;
+use crate::infrastructure::signing::TranscriptSigner;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(20);
 
@@ -405,10 +405,10 @@ impl SessionActor {
             Ok(_) => {
                 self.pending_checkpoint_chunks += 1;
                 let label = if is_final { "true" } else { "false" };
-                crate::metrics::TRANSCRIPT_CHUNKS_TOTAL
+                crate::infrastructure::metrics::TRANSCRIPT_CHUNKS_TOTAL
                     .with_label_values(&[label])
                     .inc();
-                crate::metrics::WS_UTTERANCES_TOTAL
+                crate::infrastructure::metrics::WS_UTTERANCES_TOTAL
                     .with_label_values(&[label])
                     .inc();
                 self.checkpoint_if_due(false).await;

@@ -19,7 +19,7 @@ use redis::AsyncCommands;
 use serde_json::json;
 
 use crate::config::Settings;
-use crate::redis_backplane::RedisBackplane;
+use crate::infrastructure::redis_backplane::RedisBackplane;
 
 pub const STREAM_OUTBOX: &str = "mi:outbox";
 pub const STREAM_PRIMING: &str = "mi:priming";

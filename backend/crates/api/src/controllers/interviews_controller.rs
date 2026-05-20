@@ -6,12 +6,11 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use chrono::{DateTime, Utc};
 use domain::ConfigSnapshot;
 use persistence::repo_outbox;
-use persistence::repo_realtime::{self, GradedQuestion};
+use persistence::repo_realtime;
 use persistence::repo_session::{self, NewReport, NewSession};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value as JsonValue};
 use uuid::Uuid;
 
@@ -19,6 +18,9 @@ use crate::{
     app::AppState,
     auth::HrPrincipal,
     error::{ApiError, ApiResult},
+    models::interviews::{
+        CreateInterviewRequest, CreateInterviewResponse, FinalizeResponse, ReportPayload,
+    },
     realtime::grade,
     shortcode::generate_shortcode,
 };
@@ -31,38 +33,6 @@ const MIN_BEHAVIORAL_COUNT: u16 = 0;
 const MAX_BEHAVIORAL_COUNT: u16 = 20;
 const MIN_PASS_THRESHOLD: i16 = 0;
 const MAX_PASS_THRESHOLD: i16 = 100;
-
-#[derive(Debug, Deserialize)]
-pub struct CreateInterviewRequest {
-    pub candidate_name: String,
-    pub role_title: String,
-    pub jd_text: String,
-    pub resume_text: String,
-    pub hr_email: String,
-    #[serde(default = "default_include_intro")]
-    pub include_intro: bool,
-    #[serde(default)]
-    pub tech_count: Option<u16>,
-    #[serde(default)]
-    pub behavioral_count: Option<u16>,
-    #[serde(default)]
-    pub pass_threshold: Option<i16>,
-    /// `{ "topic": ["q1", "q2"] }` (or a list of `{topic, questions}` objects).
-    /// The priming worker picks one random question per topic.
-    pub behavioral_bank: JsonValue,
-}
-
-fn default_include_intro() -> bool {
-    true
-}
-
-#[derive(Debug, Serialize)]
-pub struct CreateInterviewResponse {
-    pub id: Uuid,
-    pub shortcode: String,
-    pub share_url: String,
-    pub expires_at: DateTime<Utc>,
-}
 
 pub async fn create(
     State(state): State<AppState>,
@@ -166,29 +136,6 @@ fn validate_create(req: &CreateInterviewRequest) -> Result<(), ApiError> {
 
 // ─── Finalize / scoring ─────────────────────────────────────────────────────
 
-#[derive(Debug, Serialize)]
-pub struct FinalizeResponse {
-    pub report: ReportPayload,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ReportPayload {
-    pub id: Uuid,
-    pub session_id: Uuid,
-    pub overall_percentage: i16,
-    pub technical_score: i16,
-    pub behavioral_score: i16,
-    pub passed: bool,
-    pub summary: String,
-    pub strengths: JsonValue,
-    pub weaknesses: JsonValue,
-    pub action_items: JsonValue,
-    pub per_question: JsonValue,
-    pub model: String,
-    pub prompt_version: String,
-    pub generated_at: DateTime<Utc>,
-}
-
 /// Finalize an interview. Answers were already streamed in via WS and graded
 /// per-question by `worker-grade`; this endpoint just rolls those grades into
 /// a final report. Any question without an answer-side grade is graded inline
@@ -231,10 +178,10 @@ pub async fn finalize(
         graded = repo_realtime::load_graded_session(&state.pools.read, id).await?;
     }
 
-    let (technical, behavioral, overall) = compute_scores(&graded);
+    let (technical, behavioral, overall) = crate::services::scoring::compute_scores(&graded);
     let passed = overall >= session.pass_threshold;
 
-    let per_question_entries = build_per_question(&graded);
+    let per_question_entries = crate::services::scoring::build_per_question(&graded);
     let per_question = serde_json::to_value(&per_question_entries)
         .map_err(|e| ApiError::Internal(format!("serialize per_question: {e}")))?;
 
@@ -355,129 +302,4 @@ struct SummaryRaw {
     action_items: Vec<String>,
     #[serde(default)]
     summary: String,
-}
-
-/// Returns (technical, behavioral, overall) on a 0-100 scale. Technical
-/// includes `followup` questions. Intro is excluded from both sub-scores
-/// because the intro prompt is fixed and not a skill signal — but if neither
-/// section yielded a graded question, we degrade gracefully by averaging
-/// whatever grades we have.
-fn compute_scores(graded: &[GradedQuestion]) -> (i16, i16, i16) {
-    let mut tech_sum = 0i32;
-    let mut tech_n = 0i32;
-    let mut beh_sum = 0i32;
-    let mut beh_n = 0i32;
-    let mut other_sum = 0i32;
-    let mut other_n = 0i32;
-    for q in graded {
-        let Some(g) = &q.grade else { continue };
-        match q.kind.as_str() {
-            "technical" | "followup" => {
-                tech_sum += g.score as i32;
-                tech_n += 1;
-            }
-            "behavioral" => {
-                beh_sum += g.score as i32;
-                beh_n += 1;
-            }
-            _ => {
-                other_sum += g.score as i32;
-                other_n += 1;
-            }
-        }
-    }
-
-    let technical = if tech_n > 0 {
-        ((tech_sum + tech_n / 2) / tech_n) as i16
-    } else if beh_n > 0 {
-        ((beh_sum + beh_n / 2) / beh_n) as i16
-    } else if other_n > 0 {
-        ((other_sum + other_n / 2) / other_n) as i16
-    } else {
-        0
-    };
-    let behavioral = if beh_n > 0 {
-        ((beh_sum + beh_n / 2) / beh_n) as i16
-    } else if tech_n > 0 {
-        ((tech_sum + tech_n / 2) / tech_n) as i16
-    } else if other_n > 0 {
-        ((other_sum + other_n / 2) / other_n) as i16
-    } else {
-        0
-    };
-
-    let overall = match (tech_n, beh_n) {
-        (0, 0) => {
-            if other_n > 0 {
-                ((other_sum + other_n / 2) / other_n) as i16
-            } else {
-                0
-            }
-        }
-        (_, 0) => technical,
-        (0, _) => behavioral,
-        _ => {
-            let blended = (technical as f64) * 0.6 + (behavioral as f64) * 0.4;
-            blended.round().clamp(0.0, 100.0) as i16
-        }
-    };
-
-    (technical, behavioral, overall)
-}
-
-#[derive(Debug, Serialize)]
-struct PerQuestionEntry {
-    q: i16,
-    section: &'static str,
-    question: String,
-    score: Option<i16>,
-    feedback: String,
-    /// Time the candidate took between question display and submit.
-    /// `None` when no answer row exists (e.g. unanswered tail).
-    duration_ms: Option<i32>,
-    duration_seconds: Option<i64>,
-    time_bucket: Option<&'static str>,
-}
-
-fn build_per_question(graded: &[GradedQuestion]) -> Vec<PerQuestionEntry> {
-    graded
-        .iter()
-        .map(|q| {
-            let section = match q.kind.as_str() {
-                "intro" => "Intro",
-                "technical" => "Technical",
-                "behavioral" => "Behavioral",
-                "followup" => "Follow-up",
-                _ => "Question",
-            };
-            let duration_ms = q.duration_ms;
-            let duration_seconds = duration_ms.map(|d| (d as i64) / 1000);
-            let time_bucket = duration_ms.map(time_bucket);
-            PerQuestionEntry {
-                q: q.ordinal,
-                section,
-                question: q.prompt_text.clone(),
-                score: q.grade.as_ref().map(|g| g.score),
-                feedback: q
-                    .grade
-                    .as_ref()
-                    .map(|g| g.reasoning.clone())
-                    .unwrap_or_default(),
-                duration_ms,
-                duration_seconds,
-                time_bucket,
-            }
-        })
-        .collect()
-}
-
-/// Heuristic bands for how long a candidate took to answer a single question.
-/// Used as report metadata only — never feeds back into grading.
-fn time_bucket(duration_ms: i32) -> &'static str {
-    match duration_ms {
-        i32::MIN..=14_999 => "very_short",
-        15_000..=120_000 => "normal",
-        120_001..=240_000 => "long",
-        _ => "very_long",
-    }
 }

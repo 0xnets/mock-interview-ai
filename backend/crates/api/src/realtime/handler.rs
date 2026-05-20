@@ -52,12 +52,12 @@ pub async fn ws_handler(
         signer: state.signer.clone(),
     };
 
-    crate::metrics::WS_SESSIONS_ACTIVE.inc();
+    crate::infrastructure::metrics::WS_SESSIONS_ACTIVE.inc();
     Ok(ws.on_upgrade(move |socket| async move {
         actor::run_session(socket, session_id, deps).await;
         if let Some(lock) = session_lock {
             lock.release().await;
         }
-        crate::metrics::WS_SESSIONS_ACTIVE.dec();
+        crate::infrastructure::metrics::WS_SESSIONS_ACTIVE.dec();
     }))
 }

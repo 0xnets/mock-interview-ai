@@ -102,19 +102,19 @@ impl OutboxWorker {
         };
 
         let latency_ms = started.elapsed().as_millis() as f64;
-        crate::metrics::OUTBOX_DISPATCH_LATENCY_MS
+        crate::infrastructure::metrics::OUTBOX_DISPATCH_LATENCY_MS
             .with_label_values(&[&topic])
             .observe(latency_ms);
         match result {
             Ok(()) => {
-                crate::metrics::OUTBOX_ATTEMPTS_TOTAL
+                crate::infrastructure::metrics::OUTBOX_ATTEMPTS_TOTAL
                     .with_label_values(&[&topic, "success"])
                     .inc();
                 repo_outbox::mark_dispatched(&self.pool, id).await.ok();
             }
             Err(e) => {
                 let err = e.to_string();
-                crate::metrics::OUTBOX_ATTEMPTS_TOTAL
+                crate::infrastructure::metrics::OUTBOX_ATTEMPTS_TOTAL
                     .with_label_values(&[&topic, "error"])
                     .inc();
                 if attempts >= max {

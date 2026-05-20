@@ -15,7 +15,7 @@ use crate::{
     app::AppState,
     auth::Principal,
     error::{ApiError, ApiResult},
-    pdf::render_report_pdf,
+    infrastructure::pdf::render_report_pdf,
 };
 
 pub async fn get_report_pdf(

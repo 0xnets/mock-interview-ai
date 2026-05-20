@@ -2,25 +2,14 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use persistence::repo_session;
-use serde::Serialize;
-use uuid::Uuid;
 
 use crate::{
     app::AppState,
     error::{ApiError, ApiResult},
+    models::sessions::{JoinNonceResponse, SessionByCodeResponse},
 };
-
-#[derive(Debug, Serialize)]
-pub struct SessionByCodeResponse {
-    pub id: Uuid,
-    pub state: String,
-    pub candidate_name: String,
-    pub role_title: String,
-    pub expires_at: DateTime<Utc>,
-    pub shortcode: String,
-}
 
 /// Public lookup by shortcode. Returns only state + display info — no JD,
 /// resume, questions, or scoring rubric. The candidate hits `/join` next to
@@ -44,17 +33,6 @@ pub async fn get_by_code(
         expires_at: session.expires_at,
         shortcode: session.shortcode,
     }))
-}
-
-#[derive(Debug, Serialize)]
-pub struct JoinNonceResponse {
-    pub id: Uuid,
-    pub state: String,
-    pub candidate_name: String,
-    pub role_title: String,
-    pub expires_at: DateTime<Utc>,
-    pub join_nonce: String,
-    pub ws_path: &'static str,
 }
 
 /// Mint a single-use WebSocket join nonce for a session. The candidate uses

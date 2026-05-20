@@ -13,7 +13,7 @@ use std::time::Instant;
 use uuid::Uuid;
 
 use crate::config::Settings;
-use crate::pdf::render_report_pdf;
+use crate::infrastructure::pdf::render_report_pdf;
 
 #[derive(Clone)]
 pub struct Mailer {
@@ -103,7 +103,7 @@ impl Mailer {
         match attempt {
             Ok(()) => {
                 repo_reports::mark_mail_sent(pool, session_id).await?;
-                crate::metrics::MAIL_SEND_DURATION_MS
+                crate::infrastructure::metrics::MAIL_SEND_DURATION_MS
                     .with_label_values(&["sent"])
                     .observe(started.elapsed().as_millis() as f64);
                 let _ = repo_audit::write(
@@ -120,7 +120,7 @@ impl Mailer {
             Err(e) => {
                 let err = e.to_string();
                 repo_reports::mark_mail_failed(pool, session_id, &err).await.ok();
-                crate::metrics::MAIL_SEND_DURATION_MS
+                crate::infrastructure::metrics::MAIL_SEND_DURATION_MS
                     .with_label_values(&["failed"])
                     .observe(started.elapsed().as_millis() as f64);
                 Err(e)

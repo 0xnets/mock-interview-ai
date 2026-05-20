@@ -9,18 +9,14 @@ use tracing::info;
 mod app;
 mod auth;
 mod config;
+mod controllers;
 mod error;
-mod handlers;
-mod kms;
-mod metrics;
-mod observability;
-mod pdf;
+mod infrastructure;
+mod models;
 mod rate_limit;
 mod realtime;
-mod redis_backplane;
+mod services;
 mod shortcode;
-mod signing;
-mod streams;
 mod workers;
 
 #[tokio::main]
@@ -29,8 +25,8 @@ async fn main() -> anyhow::Result<()> {
 
     let cfg = config::Settings::from_env().context("invalid API configuration")?;
 
-    observability::init(&cfg).context("init observability")?;
-    metrics::init();
+    infrastructure::observability::init(&cfg).context("init observability")?;
+    infrastructure::metrics::init();
 
     info!(db = %mask_db_url(&cfg.database_url), "connecting to database");
     let pools = Pools::connect(
@@ -62,11 +58,11 @@ async fn main() -> anyhow::Result<()> {
 
     // ─── Phase 6: optional Redis backplane ─────────────────────────────────
     let redis = match cfg.redis_url.as_deref() {
-        Some(url) => match redis_backplane::RedisBackplane::connect(url).await {
+        Some(url) => match infrastructure::redis_backplane::RedisBackplane::connect(url).await {
             Ok(r) => {
                 info!("redis backplane connected");
                 if cfg.feature_redis_outbox {
-                    if let Err(e) = streams::ensure_groups(&r).await {
+                    if let Err(e) = infrastructure::streams::ensure_groups(&r).await {
                         tracing::warn!(error=%e, "ensure_groups failed");
                     }
                 }
@@ -86,9 +82,9 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let env_signer = Arc::new(
-        signing::TranscriptSigner::from_env().context("init transcript signer")?,
+        infrastructure::signing::TranscriptSigner::from_env().context("init transcript signer")?,
     );
-    let kms_signer = kms::build_signer(&cfg, env_signer.clone())
+    let kms_signer = infrastructure::kms::build_signer(&cfg, env_signer.clone())
         .context("init KMS-backed checkpoint signer")?;
     if let Err(e) = persistence::repo_keys::upsert_active(
         &pools.primary,
@@ -120,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
             let consumer_id = format!("api-{}", uuid::Uuid::new_v4().simple());
             let backplane = (*r).clone();
             tokio::spawn(async move {
-                streams::outbox_consumer_loop(backplane, pool, cfg_consumer, consumer_id).await;
+                infrastructure::streams::outbox_consumer_loop(backplane, pool, cfg_consumer, consumer_id).await;
             });
         }
     }
@@ -150,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
     let router = app::router(state);
 
     // ─── Phase 6: separate Prometheus listener ─────────────────────────────
-    let metrics_router = metrics::router();
+    let metrics_router = infrastructure::metrics::router();
     let metrics_addr: SocketAddr = cfg.metrics_listen_addr.parse().context("invalid METRICS_LISTEN_ADDR")?;
     tokio::spawn(async move {
         info!(%metrics_addr, "prometheus /metrics listening");
@@ -175,7 +171,7 @@ async fn main() -> anyhow::Result<()> {
     .with_graceful_shutdown(shutdown_signal())
     .await?;
 
-    observability::shutdown();
+    infrastructure::observability::shutdown();
     Ok(())
 }
 

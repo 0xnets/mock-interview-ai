@@ -194,7 +194,7 @@ pub async fn check_and_pass(
     };
 
     if let Some(retry) = retry {
-        crate::metrics::inc_rate_limited(&route);
+        crate::infrastructure::metrics::inc_rate_limited(&route);
         let secs = retry.as_secs().max(1);
         let mut resp = Response::builder()
             .status(StatusCode::TOO_MANY_REQUESTS)

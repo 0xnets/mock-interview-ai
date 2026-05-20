@@ -16,7 +16,7 @@ use anyhow::Result;
 use redis::AsyncCommands;
 use uuid::Uuid;
 
-use crate::redis_backplane::RedisBackplane;
+use crate::infrastructure::redis_backplane::RedisBackplane;
 
 const HOLD_SECS: u64 = 30;
 const RENEW_EVERY: Duration = Duration::from_secs(10);

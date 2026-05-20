@@ -16,10 +16,9 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use axum_extra::extract::cookie::CookieJar;
 use chrono::Duration;
 use persistence::{repo_audit, repo_auth};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -27,26 +26,11 @@ use crate::{
     app::AppState,
     auth::{hash_password, mint_refresh_token, verify_password, Principal},
     error::{ApiError, ApiResult},
+    models::auth::{AcceptInviteRequest, CreateInviteRequest, CreateInviteResponse, LoginRequest},
+    services::auth_session::{self, REFRESH_COOKIE},
 };
 
-const REFRESH_COOKIE: &str = "mi_rt";
-
 // ─── login ──────────────────────────────────────────────────────────────────
-
-#[derive(Debug, Deserialize)]
-pub struct LoginRequest {
-    pub email: String,
-    pub password: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct LoginResponse {
-    pub access_token: String,
-    pub expires_in: i64,
-    pub account_id: Uuid,
-    pub role: String,
-    pub display_name: Option<String>,
-}
 
 pub async fn login(
     State(state): State<AppState>,
@@ -90,7 +74,7 @@ pub async fn login(
         return Err(ApiError::Unauthorized);
     }
 
-    issue_tokens(&state, &account.id, &account.role, &account.display_name, jar, &headers, event_id, None).await
+    auth_session::issue_tokens(&state, &account.id, &account.role, &account.display_name, jar, &headers, event_id, None).await
 }
 
 async fn audit_login_failed(
@@ -161,7 +145,7 @@ pub async fn refresh(
     }
 
     let event_id = Uuid::new_v4();
-    issue_tokens(
+    auth_session::issue_tokens(
         &state,
         &account.id,
         &account.role,
@@ -183,17 +167,11 @@ pub async fn logout(
     if let Some(c) = jar.get(REFRESH_COOKIE) {
         let _ = repo_auth::revoke_refresh_token(&state.pools.primary, c.value()).await;
     }
-    let cleared = clear_refresh_cookie(&state);
+    let cleared = auth_session::clear_refresh_cookie(&state);
     Ok((StatusCode::NO_CONTENT, jar.add(cleared)).into_response())
 }
 
 // ─── accept invite ──────────────────────────────────────────────────────────
-
-#[derive(Debug, Deserialize)]
-pub struct AcceptInviteRequest {
-    pub token: String,
-    pub password: String,
-}
 
 pub async fn accept_invite(
     State(state): State<AppState>,
@@ -220,27 +198,6 @@ pub async fn accept_invite(
 }
 
 // ─── admin: create invite ───────────────────────────────────────────────────
-
-#[derive(Debug, Deserialize)]
-pub struct CreateInviteRequest {
-    pub email: String,
-    #[serde(default)]
-    pub display_name: Option<String>,
-    #[serde(default = "default_role")]
-    pub role: String,
-}
-
-fn default_role() -> String {
-    "hr".into()
-}
-
-#[derive(Debug, Serialize)]
-pub struct CreateInviteResponse {
-    pub account_id: Uuid,
-    pub token: String,
-    pub accept_url: String,
-    pub expires_in_hours: i64,
-}
 
 pub async fn create_invite(
     State(state): State<AppState>,
@@ -298,86 +255,4 @@ pub async fn create_invite(
         accept_url,
         expires_in_hours: ttl_hours,
     }))
-}
-
-// ─── shared: cookie + JWT minting ───────────────────────────────────────────
-
-async fn issue_tokens(
-    state: &AppState,
-    account_id: &Uuid,
-    role: &str,
-    display_name: &Option<String>,
-    jar: CookieJar,
-    headers: &HeaderMap,
-    event_id: Uuid,
-    rotated_from: Option<String>,
-) -> ApiResult<axum::response::Response> {
-    let keys = state
-        .jwt
-        .as_ref()
-        .ok_or_else(|| ApiError::Internal("JWT keys not initialized".into()))?;
-
-    let access_ttl_min = state.cfg.access_token_ttl_minutes;
-    let refresh_ttl_days = state.cfg.refresh_token_ttl_days;
-
-    let access = keys
-        .mint_access(*account_id, role, event_id, Duration::minutes(access_ttl_min))
-        .map_err(|e| ApiError::Internal(format!("mint access: {e}")))?;
-
-    let raw_refresh = mint_refresh_token();
-    let ua = headers
-        .get(header::USER_AGENT)
-        .and_then(|v| v.to_str().ok());
-    repo_auth::insert_refresh_token(
-        &state.pools.primary,
-        &raw_refresh,
-        *account_id,
-        Duration::days(refresh_ttl_days),
-        rotated_from.as_deref(),
-        ua,
-        None,
-    )
-    .await?;
-    let _ = repo_auth::touch_last_login(&state.pools.primary, *account_id).await;
-
-    let _ = repo_audit::write(
-        &state.pools.primary,
-        Some(*account_id),
-        None,
-        "auth.login",
-        Some(event_id),
-        json!({ "rotated": rotated_from.is_some() }),
-    )
-    .await;
-
-    let body = LoginResponse {
-        access_token: access,
-        expires_in: access_ttl_min * 60,
-        account_id: *account_id,
-        role: role.to_string(),
-        display_name: display_name.clone(),
-    };
-
-    let cookie = build_refresh_cookie(state, raw_refresh, refresh_ttl_days);
-    Ok((StatusCode::OK, jar.add(cookie), Json(body)).into_response())
-}
-
-fn build_refresh_cookie(state: &AppState, value: String, ttl_days: i64) -> Cookie<'static> {
-    let mut c = Cookie::new(REFRESH_COOKIE.to_string(), value);
-    c.set_http_only(true);
-    c.set_same_site(SameSite::Strict);
-    c.set_path("/v1/auth");
-    c.set_secure(state.cfg.cookies_secure);
-    c.set_max_age(time::Duration::days(ttl_days));
-    c
-}
-
-fn clear_refresh_cookie(state: &AppState) -> Cookie<'static> {
-    let mut c = Cookie::new(REFRESH_COOKIE.to_string(), "".to_string());
-    c.set_http_only(true);
-    c.set_same_site(SameSite::Strict);
-    c.set_path("/v1/auth");
-    c.set_secure(state.cfg.cookies_secure);
-    c.set_max_age(time::Duration::seconds(0));
-    c
 }
