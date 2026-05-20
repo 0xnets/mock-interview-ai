@@ -65,8 +65,8 @@ pub async fn create_session(pool: &PgPool, req: NewSession) -> Result<CreatedSes
         let session_id = Uuid::new_v4();
         let shortcode = (req.shortcode_factory)();
 
-        let config_snapshot = serde_json::to_value(&req.config_snapshot)
-            .expect("ConfigSnapshot serializes cleanly");
+        let config_snapshot =
+            serde_json::to_value(&req.config_snapshot).expect("ConfigSnapshot serializes cleanly");
 
         let inserted: Option<(Uuid,)> = sqlx::query_as(
             r#"
@@ -292,11 +292,7 @@ pub async fn complete_priming(
     Ok(())
 }
 
-pub async fn mark_aborted(
-    pool: &PgPool,
-    session_id: Uuid,
-    reason: &str,
-) -> Result<(), DbError> {
+pub async fn mark_aborted(pool: &PgPool, session_id: Uuid, reason: &str) -> Result<(), DbError> {
     sqlx::query(
         r#"
         UPDATE interview_sessions
@@ -358,9 +354,16 @@ pub async fn find_by_shortcode(pool: &PgPool, code: &str) -> Result<SessionByCod
 pub async fn consume_shortlink(pool: &PgPool, code: &str) -> Result<SessionByCode, DbError> {
     let mut tx: Transaction<'_, Postgres> = pool.begin().await?;
 
-    let row: Option<(Uuid, String, String, String, DateTime<Utc>, String, Option<DateTime<Utc>>)> =
-        sqlx::query_as(
-            r#"
+    let row: Option<(
+        Uuid,
+        String,
+        String,
+        String,
+        DateTime<Utc>,
+        String,
+        Option<DateTime<Utc>>,
+    )> = sqlx::query_as(
+        r#"
             SELECT s.id, s.state, s.candidate_name, s.role_title, s.expires_at,
                    s.shortcode, l.consumed_at
             FROM shortlinks l
@@ -368,10 +371,10 @@ pub async fn consume_shortlink(pool: &PgPool, code: &str) -> Result<SessionByCod
             WHERE l.code = $1
             FOR UPDATE OF l
             "#,
-        )
-        .bind(code)
-        .fetch_optional(&mut *tx)
-        .await?;
+    )
+    .bind(code)
+    .fetch_optional(&mut *tx)
+    .await?;
 
     let row = match row {
         Some(r) => r,
@@ -443,17 +446,18 @@ pub struct CandidatePayload {
 }
 
 pub async fn candidate_payload(pool: &PgPool, code: &str) -> Result<CandidatePayload, DbError> {
-    let row: Option<(Uuid, String, String, String, DateTime<Utc>, Option<String>)> = sqlx::query_as(
-        r#"
+    let row: Option<(Uuid, String, String, String, DateTime<Utc>, Option<String>)> =
+        sqlx::query_as(
+            r#"
         SELECT s.id, s.state, s.candidate_name, s.role_title, s.expires_at, s.scoring_context
         FROM interview_sessions s
         JOIN shortlinks l ON l.session_id = s.id
         WHERE l.code = $1
         "#,
-    )
-    .bind(code)
-    .fetch_optional(pool)
-    .await?;
+        )
+        .bind(code)
+        .fetch_optional(pool)
+        .await?;
     let row = row.ok_or(DbError::NotFound)?;
     let (session_id, state, name, role, expires_at, scoring_context) = row;
 
@@ -505,18 +509,27 @@ pub struct SessionForScoring {
 }
 
 pub async fn find_for_scoring(pool: &PgPool, id: Uuid) -> Result<SessionForScoring, DbError> {
-    let row: Option<(Uuid, String, String, String, String, String, i16, Option<String>, String)> =
-        sqlx::query_as(
-            r#"
+    let row: Option<(
+        Uuid,
+        String,
+        String,
+        String,
+        String,
+        String,
+        i16,
+        Option<String>,
+        String,
+    )> = sqlx::query_as(
+        r#"
             SELECT id, state, candidate_name, role_title, jd_text, resume_text,
                    pass_threshold, scoring_context, hr_email
             FROM interview_sessions
             WHERE id = $1
             "#,
-        )
-        .bind(id)
-        .fetch_optional(pool)
-        .await?;
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
     let row = row.ok_or(DbError::NotFound)?;
     Ok(SessionForScoring {
         id: row.0,

@@ -26,7 +26,11 @@ pub async fn readyz(State(state): State<AppState>) -> impl IntoResponse {
     };
 
     let ok = db_ok && redis_ok;
-    let status = if ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
+    let status = if ok {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
     (
         status,
         Json(json!({

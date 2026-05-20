@@ -80,7 +80,11 @@ pub async fn check_redis(
 
     let mut pipe = redis::pipe();
     pipe.atomic();
-    pipe.cmd("ZREMRANGEBYSCORE").arg(key).arg("-inf").arg(cutoff).ignore();
+    pipe.cmd("ZREMRANGEBYSCORE")
+        .arg(key)
+        .arg("-inf")
+        .arg(cutoff)
+        .ignore();
     pipe.zadd(key, format!("{now_ms}:{}", rand::random::<u32>()), now_ms);
     pipe.zcard(key);
     pipe.expire(key, (window_ms / 1000).max(1));
@@ -143,7 +147,9 @@ pub fn client_ip(headers: &HeaderMap, connect_info: Option<&IpAddr>) -> String {
     if let Some(ip) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
         return ip.to_string();
     }
-    connect_info.map(|ip| ip.to_string()).unwrap_or_else(|| "unknown".into())
+    connect_info
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "unknown".into())
 }
 
 /// Middleware applied to a single route. The route name is what

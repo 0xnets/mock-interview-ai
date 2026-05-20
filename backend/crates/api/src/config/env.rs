@@ -12,14 +12,14 @@ use super::{defaults, validation, Settings};
 
 impl Settings {
     pub fn from_env() -> Result<Self> {
-        let database_url =
-            env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-        let database_replica_url = env::var("DATABASE_REPLICA_URL").ok().filter(|s| !s.is_empty());
+        let database_url = env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
+        let database_replica_url = env::var("DATABASE_REPLICA_URL")
+            .ok()
+            .filter(|s| !s.is_empty());
         let db_max_connections = env_u32("DB_MAX_CONNECTIONS", defaults::DB_MAX_CONNECTIONS)?;
-        let listen_addr =
-            env::var("LISTEN_ADDR").unwrap_or_else(|_| defaults::LISTEN_ADDR.into());
-        let metrics_listen_addr =
-            env::var("METRICS_LISTEN_ADDR").unwrap_or_else(|_| defaults::METRICS_LISTEN_ADDR.into());
+        let listen_addr = env::var("LISTEN_ADDR").unwrap_or_else(|_| defaults::LISTEN_ADDR.into());
+        let metrics_listen_addr = env::var("METRICS_LISTEN_ADDR")
+            .unwrap_or_else(|_| defaults::METRICS_LISTEN_ADDR.into());
         let web_base_url =
             env::var("WEB_BASE_URL").unwrap_or_else(|_| defaults::WEB_BASE_URL.into());
         let session_ttl_hours = env_i64("SESSION_TTL_HOURS", defaults::SESSION_TTL_HOURS)?;
@@ -32,8 +32,8 @@ impl Settings {
             .filter(|s| !s.is_empty())
             .collect();
 
-        let anthropic_api_key = env::var("ANTHROPIC_API_KEY")
-            .map_err(|_| anyhow!("ANTHROPIC_API_KEY must be set"))?;
+        let anthropic_api_key =
+            env::var("ANTHROPIC_API_KEY").map_err(|_| anyhow!("ANTHROPIC_API_KEY must be set"))?;
         let anthropic_model_priming = env::var("ANTHROPIC_MODEL_PRIMING")
             .unwrap_or_else(|_| defaults::ANTHROPIC_MODEL_PRIMING.into());
         let anthropic_model_scoring = env::var("ANTHROPIC_MODEL_SCORING")
@@ -47,10 +47,14 @@ impl Settings {
             env_u64("PRIME_POLL_INTERVAL_MS", defaults::PRIME_POLL_INTERVAL_MS)?;
         let prime_batch_size = env_i64("PRIME_BATCH_SIZE", defaults::PRIME_BATCH_SIZE)?;
 
-        let feature_transcript_chain =
-            env_bool("FEATURE_TRANSCRIPT_CHAIN", defaults::FEATURE_TRANSCRIPT_CHAIN);
-        let transcript_checkpoint_every =
-            env_i32("TRANSCRIPT_CHECKPOINT_EVERY", defaults::TRANSCRIPT_CHECKPOINT_EVERY)?;
+        let feature_transcript_chain = env_bool(
+            "FEATURE_TRANSCRIPT_CHAIN",
+            defaults::FEATURE_TRANSCRIPT_CHAIN,
+        );
+        let transcript_checkpoint_every = env_i32(
+            "TRANSCRIPT_CHECKPOINT_EVERY",
+            defaults::TRANSCRIPT_CHECKPOINT_EVERY,
+        )?;
 
         let outbox_poll_interval_ms =
             env_u64("OUTBOX_POLL_INTERVAL_MS", defaults::OUTBOX_POLL_INTERVAL_MS)?;
@@ -67,8 +71,10 @@ impl Settings {
         // ─── Phase 6 ───────────────────────────────────────────────────────
 
         let feature_jwt_auth = env_bool("FEATURE_JWT_AUTH", defaults::FEATURE_JWT_AUTH);
-        let access_token_ttl_minutes =
-            env_i64("ACCESS_TOKEN_TTL_MINUTES", defaults::ACCESS_TOKEN_TTL_MINUTES)?;
+        let access_token_ttl_minutes = env_i64(
+            "ACCESS_TOKEN_TTL_MINUTES",
+            defaults::ACCESS_TOKEN_TTL_MINUTES,
+        )?;
         let refresh_token_ttl_days =
             env_i64("REFRESH_TOKEN_TTL_DAYS", defaults::REFRESH_TOKEN_TTL_DAYS)?;
         let invite_ttl_hours = env_i64("INVITE_TTL_HOURS", defaults::INVITE_TTL_HOURS)?;
@@ -79,8 +85,10 @@ impl Settings {
             "RATE_LIMIT_CREATE_INTERVIEW_PER_HOUR",
             defaults::RATE_LIMIT_CREATE_INTERVIEW_PER_HOUR,
         )?;
-        let rate_limit_login_per_min_ip =
-            env_u32("RATE_LIMIT_LOGIN_PER_MIN_IP", defaults::RATE_LIMIT_LOGIN_PER_MIN_IP)?;
+        let rate_limit_login_per_min_ip = env_u32(
+            "RATE_LIMIT_LOGIN_PER_MIN_IP",
+            defaults::RATE_LIMIT_LOGIN_PER_MIN_IP,
+        )?;
         let rate_limit_login_per_hour_email = env_u32(
             "RATE_LIMIT_LOGIN_PER_HOUR_EMAIL",
             defaults::RATE_LIMIT_LOGIN_PER_HOUR_EMAIL,
@@ -161,7 +169,10 @@ impl Settings {
 
 fn env_bool(key: &str, default: bool) -> bool {
     match env::var(key) {
-        Ok(v) => matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"),
+        Ok(v) => matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ),
         Err(_) => default,
     }
 }

@@ -37,11 +37,7 @@ pub async fn redirect_to_session(
         session.shortcode
     );
 
-    Ok((
-        StatusCode::FOUND,
-        [(header::LOCATION, target)],
-    )
-        .into_response())
+    Ok((StatusCode::FOUND, [(header::LOCATION, target)]).into_response())
 }
 
 fn sanitize_code(raw: &str) -> Option<String> {

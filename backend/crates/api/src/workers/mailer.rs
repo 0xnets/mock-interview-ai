@@ -119,7 +119,9 @@ impl Mailer {
             }
             Err(e) => {
                 let err = e.to_string();
-                repo_reports::mark_mail_failed(pool, session_id, &err).await.ok();
+                repo_reports::mark_mail_failed(pool, session_id, &err)
+                    .await
+                    .ok();
                 crate::infrastructure::metrics::MAIL_SEND_DURATION_MS
                     .with_label_values(&["failed"])
                     .observe(started.elapsed().as_millis() as f64);

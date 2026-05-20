@@ -41,7 +41,11 @@ pub async fn relay_outbox_row(
         .xadd(
             STREAM_OUTBOX,
             "*",
-            &[("id", id.to_string().as_str()), ("topic", topic), ("payload", payload.as_str())],
+            &[
+                ("id", id.to_string().as_str()),
+                ("topic", topic),
+                ("payload", payload.as_str()),
+            ],
         )
         .await?;
     Ok(())
@@ -113,7 +117,9 @@ pub async fn outbox_consumer_loop(
                     .map
                     .get("id")
                     .and_then(|v| match v {
-                        redis::Value::BulkString(b) => std::str::from_utf8(b).ok().map(str::to_string),
+                        redis::Value::BulkString(b) => {
+                            std::str::from_utf8(b).ok().map(str::to_string)
+                        }
                         _ => None,
                     })
                     .unwrap_or_default();
@@ -122,7 +128,9 @@ pub async fn outbox_consumer_loop(
                     .map
                     .get("topic")
                     .and_then(|v| match v {
-                        redis::Value::BulkString(b) => std::str::from_utf8(b).ok().map(str::to_string),
+                        redis::Value::BulkString(b) => {
+                            std::str::from_utf8(b).ok().map(str::to_string)
+                        }
                         _ => None,
                     })
                     .unwrap_or_default();
@@ -150,10 +158,16 @@ pub async fn outbox_consumer_loop(
 /// `OutboxWorker::handle`. The relay's job here is to wake whichever pod
 /// happens to be free instead of every pod polling. We rely on the lease in
 /// `claim_batch` to guarantee single-dispatch semantics.
-async fn handle_via_db(pool: &PgPool, _cfg: &Settings, _outbox_id: i64, _topic: &str) -> Result<()> {
+async fn handle_via_db(
+    pool: &PgPool,
+    _cfg: &Settings,
+    _outbox_id: i64,
+    _topic: &str,
+) -> Result<()> {
     // Sanity check that the row still needs work — if it's already dispatched,
     // skip without touching anything else.
-    let _: Vec<repo_outbox::OutboxRow> = repo_outbox::claim_batch(pool, 1, ChronoDuration::seconds(60)).await?;
+    let _: Vec<repo_outbox::OutboxRow> =
+        repo_outbox::claim_batch(pool, 1, ChronoDuration::seconds(60)).await?;
     Ok(())
 }
 

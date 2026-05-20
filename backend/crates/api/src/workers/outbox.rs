@@ -42,12 +42,8 @@ impl OutboxWorker {
         );
 
         loop {
-            let rows = match repo_outbox::claim_batch(
-                &self.pool,
-                self.cfg.outbox_batch_size,
-                lease,
-            )
-            .await
+            let rows = match repo_outbox::claim_batch(&self.pool, self.cfg.outbox_batch_size, lease)
+                .await
             {
                 Ok(r) => r,
                 Err(e) => {
@@ -92,7 +88,9 @@ impl OutboxWorker {
                         return;
                     }
                 };
-                self.mailer.send_report(&self.pool, payload.session_id).await
+                self.mailer
+                    .send_report(&self.pool, payload.session_id)
+                    .await
             }
             other => {
                 tracing::warn!(%other, "outbox unknown topic; marking dispatched");
@@ -122,14 +120,9 @@ impl OutboxWorker {
                     // Push the lease far out so it stops retrying without
                     // losing the audit trail. Audit log entry would belong
                     // here when Phase 6 wires it up.
-                    repo_outbox::mark_failed(
-                        &self.pool,
-                        id,
-                        &err,
-                        ChronoDuration::days(7),
-                    )
-                    .await
-                    .ok();
+                    repo_outbox::mark_failed(&self.pool, id, &err, ChronoDuration::days(7))
+                        .await
+                        .ok();
                 } else {
                     let backoff = backoff_for(attempts);
                     tracing::warn!(%id, %topic, attempts, error=%err, "outbox dispatch failed; will retry");

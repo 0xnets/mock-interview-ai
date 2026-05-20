@@ -35,7 +35,12 @@ pub async fn issue_tokens(
     let refresh_ttl_days = state.cfg.refresh_token_ttl_days;
 
     let access = keys
-        .mint_access(*account_id, role, event_id, Duration::minutes(access_ttl_min))
+        .mint_access(
+            *account_id,
+            role,
+            event_id,
+            Duration::minutes(access_ttl_min),
+        )
         .map_err(|e| ApiError::Internal(format!("mint access: {e}")))?;
 
     let raw_refresh = mint_refresh_token();

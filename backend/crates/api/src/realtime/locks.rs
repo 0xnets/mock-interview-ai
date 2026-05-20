@@ -31,10 +31,7 @@ pub struct SessionLock {
 impl SessionLock {
     /// Try to acquire `ws:session:{session_id}`. Returns None if another pod
     /// holds it (caller should reject with 409).
-    pub async fn acquire(
-        backplane: &RedisBackplane,
-        session_id: Uuid,
-    ) -> Result<Option<Self>> {
+    pub async fn acquire(backplane: &RedisBackplane, session_id: Uuid) -> Result<Option<Self>> {
         let key = format!("ws:session:{session_id}");
         let token = Uuid::new_v4().simple().to_string();
         let mut mgr = backplane.mgr.clone();
@@ -90,7 +87,12 @@ impl SessionLock {
     }
 
     pub async fn release(self) {
-        let SessionLock { key, token, mut mgr, cancel } = self;
+        let SessionLock {
+            key,
+            token,
+            mut mgr,
+            cancel,
+        } = self;
         let _ = cancel.send(());
         let script = redis::Script::new(
             r#"
@@ -101,10 +103,6 @@ impl SessionLock {
             end
             "#,
         );
-        let _: redis::RedisResult<i32> = script
-            .key(key)
-            .arg(token)
-            .invoke_async(&mut mgr)
-            .await;
+        let _: redis::RedisResult<i32> = script.key(key).arg(token).invoke_async(&mut mgr).await;
     }
 }

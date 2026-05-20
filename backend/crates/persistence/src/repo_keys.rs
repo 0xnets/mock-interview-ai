@@ -50,25 +50,33 @@ pub async fn retire(pool: &PgPool, key_id: &str) -> Result<(), DbError> {
 }
 
 pub async fn list_all(pool: &PgPool) -> Result<Vec<KeyVersion>, DbError> {
-    let rows: Vec<(String, Vec<u8>, String, DateTime<Utc>, Option<DateTime<Utc>>, Option<String>)> =
-        sqlx::query_as(
-            r#"
+    let rows: Vec<(
+        String,
+        Vec<u8>,
+        String,
+        DateTime<Utc>,
+        Option<DateTime<Utc>>,
+        Option<String>,
+    )> = sqlx::query_as(
+        r#"
             SELECT key_id, public_key, status, created_at, retired_at, notes
             FROM key_versions
             ORDER BY created_at DESC
             "#,
-        )
-        .fetch_all(pool)
-        .await?;
+    )
+    .fetch_all(pool)
+    .await?;
     Ok(rows
         .into_iter()
-        .map(|(key_id, public_key, status, created_at, retired_at, notes)| KeyVersion {
-            key_id,
-            public_key,
-            status,
-            created_at,
-            retired_at,
-            notes,
-        })
+        .map(
+            |(key_id, public_key, status, created_at, retired_at, notes)| KeyVersion {
+                key_id,
+                public_key,
+                status,
+                created_at,
+                retired_at,
+                notes,
+            },
+        )
         .collect())
 }

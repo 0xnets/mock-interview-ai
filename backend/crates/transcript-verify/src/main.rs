@@ -75,7 +75,9 @@ fn run() -> Result<()> {
         Some(p) => std::fs::read_to_string(&p).with_context(|| format!("read {p}"))?,
         None => {
             let mut s = String::new();
-            std::io::stdin().read_to_string(&mut s).context("read stdin")?;
+            std::io::stdin()
+                .read_to_string(&mut s)
+                .context("read stdin")?;
             s
         }
     };
@@ -93,7 +95,8 @@ fn run() -> Result<()> {
                 c.prev_hash_hex
             ));
         }
-        let canonical = canonical_row_bytes(c.seq, c.question_id, c.is_final, c.client_ts_ms, &c.text);
+        let canonical =
+            canonical_row_bytes(c.seq, c.question_id, c.is_final, c.client_ts_ms, &c.text);
         let mut h = Sha256::new();
         h.update(&prev);
         h.update(&canonical);
@@ -111,7 +114,9 @@ fn run() -> Result<()> {
     }
 
     // Verify each checkpoint signature.
-    let pk_bytes = B64.decode(&t.public_key_b64).context("decode public_key_b64")?;
+    let pk_bytes = B64
+        .decode(&t.public_key_b64)
+        .context("decode public_key_b64")?;
     if pk_bytes.len() != 32 {
         return Err(anyhow!("public_key_b64 must decode to 32 bytes"));
     }
@@ -122,7 +127,9 @@ fn run() -> Result<()> {
     let session_id_str = t.session_id.to_string();
     for cp in &t.checkpoints {
         let row_hash = hex::decode(&cp.row_hash_hex).context("decode checkpoint row_hash_hex")?;
-        let sig_bytes = B64.decode(&cp.signature_b64).context("decode signature_b64")?;
+        let sig_bytes = B64
+            .decode(&cp.signature_b64)
+            .context("decode signature_b64")?;
         if sig_bytes.len() != 64 {
             return Err(anyhow!("signature must decode to 64 bytes"));
         }

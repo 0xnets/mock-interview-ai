@@ -9,7 +9,9 @@ use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Context, Result};
-use argon2::password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::password_hash::{
+    rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+};
 use argon2::Argon2;
 use axum::{
     extract::{FromRequestParts, State},
@@ -29,12 +31,12 @@ use crate::{app::AppState, error::ApiError};
 /// request, so a revoked account stops being trusted within seconds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccessClaims {
-    pub sub: String,    // account_id
-    pub role: String,   // hr | admin | super_admin
+    pub sub: String,  // account_id
+    pub role: String, // hr | admin | super_admin
     pub exp: i64,
     pub iat: i64,
     pub iss: String,
-    pub kid: String,    // key id; reserved for jwks rotation
+    pub kid: String, // key id; reserved for jwks rotation
     /// Request-correlation id minted at login. Echoed into audit_log.event_id
     /// for any state-changing handler under this session.
     pub sid: String,
@@ -117,7 +119,9 @@ pub struct HrPrincipal {
 
 impl From<&Principal> for HrPrincipal {
     fn from(p: &Principal) -> Self {
-        Self { account_id: p.account_id }
+        Self {
+            account_id: p.account_id,
+        }
     }
 }
 
@@ -176,14 +180,8 @@ async fn authenticate(state: &AppState, headers: &HeaderMap) -> Result<Principal
     if state.cfg.feature_jwt_auth {
         if let Some(keys) = state.jwt.as_ref() {
             if let Ok(claims) = keys.verify_access(&raw) {
-                let account_id: Uuid = claims
-                    .sub
-                    .parse()
-                    .map_err(|_| ApiError::Unauthorized)?;
-                let event_id: Uuid = claims
-                    .sid
-                    .parse()
-                    .unwrap_or_else(|_| Uuid::new_v4());
+                let account_id: Uuid = claims.sub.parse().map_err(|_| ApiError::Unauthorized)?;
+                let event_id: Uuid = claims.sid.parse().unwrap_or_else(|_| Uuid::new_v4());
                 return Ok(Principal {
                     account_id,
                     role: claims.role,
@@ -262,7 +260,11 @@ pub fn verify_password(plain: &str, hash: &str) -> bool {
 pub fn mint_refresh_token() -> String {
     let r1: u128 = rand::random();
     let r2: u128 = rand::random();
-    format!("{}{}", hex::encode(r1.to_be_bytes()), hex::encode(r2.to_be_bytes()))
+    format!(
+        "{}{}",
+        hex::encode(r1.to_be_bytes()),
+        hex::encode(r2.to_be_bytes())
+    )
 }
 
 pub fn now_unix() -> i64 {

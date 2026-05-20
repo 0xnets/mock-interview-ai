@@ -56,7 +56,10 @@ impl CheckpointSigner for EnvSigner {
     }
 }
 
-pub fn build_signer(cfg: &Settings, env_signer: Arc<TranscriptSigner>) -> Result<Arc<dyn CheckpointSigner>> {
+pub fn build_signer(
+    cfg: &Settings,
+    env_signer: Arc<TranscriptSigner>,
+) -> Result<Arc<dyn CheckpointSigner>> {
     match cfg.kms_provider.as_str() {
         "env" => Ok(Arc::new(EnvSigner(env_signer))),
         "aws" => Err(anyhow!(

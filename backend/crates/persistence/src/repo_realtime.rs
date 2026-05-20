@@ -86,14 +86,16 @@ pub async fn list_questions(pool: &PgPool, session_id: Uuid) -> Result<Vec<Quest
     .await?;
     Ok(rows
         .into_iter()
-        .map(|(id, ordinal, kind, parent_question_id, topic, prompt_text)| QuestionRow {
-            id,
-            ordinal,
-            kind,
-            parent_question_id,
-            topic,
-            prompt_text,
-        })
+        .map(
+            |(id, ordinal, kind, parent_question_id, topic, prompt_text)| QuestionRow {
+                id,
+                ordinal,
+                kind,
+                parent_question_id,
+                topic,
+                prompt_text,
+            },
+        )
         .collect())
 }
 

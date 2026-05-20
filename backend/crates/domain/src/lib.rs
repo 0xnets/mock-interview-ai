@@ -105,5 +105,4 @@ pub struct ConfigSnapshot {
 }
 
 /// Stable intro question text per spec.
-pub const INTRO_QUESTION_TEXT: &str =
-    "Tell me about yourself and walk me through your experience.";
+pub const INTRO_QUESTION_TEXT: &str = "Tell me about yourself and walk me through your experience.";

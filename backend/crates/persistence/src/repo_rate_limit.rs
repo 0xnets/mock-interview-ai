@@ -30,11 +30,13 @@ pub async fn list_for_account(
     .await?;
     Ok(rows
         .into_iter()
-        .map(|(account_id, route, limit_count, window_secs)| OverrideRow {
-            account_id,
-            route,
-            limit_count,
-            window_secs,
-        })
+        .map(
+            |(account_id, route, limit_count, window_secs)| OverrideRow {
+                account_id,
+                route,
+                limit_count,
+                window_secs,
+            },
+        )
         .collect())
 }

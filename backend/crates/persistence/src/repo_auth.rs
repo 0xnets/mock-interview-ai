@@ -25,17 +25,25 @@ pub struct Account {
 }
 
 pub async fn find_account_by_email(pool: &PgPool, email: &str) -> Result<Account, DbError> {
-    let row: Option<(Uuid, String, Option<String>, Option<String>, String, String, Option<Uuid>, Option<DateTime<Utc>>)> =
-        sqlx::query_as(
-            r#"
+    let row: Option<(
+        Uuid,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        String,
+        Option<Uuid>,
+        Option<DateTime<Utc>>,
+    )> = sqlx::query_as(
+        r#"
             SELECT id, email::text, password_hash, display_name, role, status, org_id, last_login_at
             FROM accounts
             WHERE email = $1::citext
             "#,
-        )
-        .bind(email)
-        .fetch_optional(pool)
-        .await?;
+    )
+    .bind(email)
+    .fetch_optional(pool)
+    .await?;
     let row = row.ok_or(DbError::NotFound)?;
     Ok(Account {
         id: row.0,
@@ -50,17 +58,25 @@ pub async fn find_account_by_email(pool: &PgPool, email: &str) -> Result<Account
 }
 
 pub async fn find_account_by_id(pool: &PgPool, id: Uuid) -> Result<Account, DbError> {
-    let row: Option<(Uuid, String, Option<String>, Option<String>, String, String, Option<Uuid>, Option<DateTime<Utc>>)> =
-        sqlx::query_as(
-            r#"
+    let row: Option<(
+        Uuid,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        String,
+        Option<Uuid>,
+        Option<DateTime<Utc>>,
+    )> = sqlx::query_as(
+        r#"
             SELECT id, email::text, password_hash, display_name, role, status, org_id, last_login_at
             FROM accounts
             WHERE id = $1
             "#,
-        )
-        .bind(id)
-        .fetch_optional(pool)
-        .await?;
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
     let row = row.ok_or(DbError::NotFound)?;
     Ok(Account {
         id: row.0,
@@ -103,10 +119,7 @@ pub struct NewAccount {
     pub invited_by: Uuid,
 }
 
-pub async fn create_invited_account(
-    pool: &PgPool,
-    req: NewAccount,
-) -> Result<Uuid, DbError> {
+pub async fn create_invited_account(pool: &PgPool, req: NewAccount) -> Result<Uuid, DbError> {
     let id = Uuid::new_v4();
     let inserted: Option<(Uuid,)> = sqlx::query_as(
         r#"
@@ -197,10 +210,7 @@ pub async fn lookup_refresh_token(
 /// account id only if the row was active. A revoked/expired token returns
 /// `Err(DbError::NotFound)` — callers should treat that as a reuse attempt
 /// and revoke the whole family (see `revoke_family`).
-pub async fn rotate_refresh_token(
-    pool: &PgPool,
-    raw_token: &str,
-) -> Result<Uuid, DbError> {
+pub async fn rotate_refresh_token(pool: &PgPool, raw_token: &str) -> Result<Uuid, DbError> {
     let hash = hash_token(raw_token);
     let row: Option<(Uuid,)> = sqlx::query_as(
         r#"

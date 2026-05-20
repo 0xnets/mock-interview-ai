@@ -41,7 +41,10 @@ impl PrimingWorker {
 
     pub async fn run(self) {
         let interval = Duration::from_millis(self.cfg.prime_poll_interval_ms.max(50));
-        tracing::info!(interval_ms = self.cfg.prime_poll_interval_ms, "priming worker started");
+        tracing::info!(
+            interval_ms = self.cfg.prime_poll_interval_ms,
+            "priming worker started"
+        );
 
         loop {
             let work_found = self.tick().await;
@@ -63,18 +66,16 @@ impl PrimingWorker {
     /// Process one batch. Returns true if any work was done so the loop can
     /// re-poll immediately instead of sleeping.
     async fn tick(&self) -> bool {
-        let pending = match repo_session::fetch_pending_for_priming(
-            &self.pool,
-            self.cfg.prime_batch_size,
-        )
-        .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::error!(error = %e, "fetch_pending_for_priming failed");
-                return false;
-            }
-        };
+        let pending =
+            match repo_session::fetch_pending_for_priming(&self.pool, self.cfg.prime_batch_size)
+                .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!(error = %e, "fetch_pending_for_priming failed");
+                    return false;
+                }
+            };
 
         if pending.is_empty() {
             return false;
@@ -102,11 +103,8 @@ impl PrimingWorker {
 
         // 1. Generate technical questions.
         let tech_sys = prompts::tech_questions_system(tech_count);
-        let tech_user = prompts::tech_questions_user(
-            &session.jd_text,
-            &session.resume_text,
-            tech_count,
-        );
+        let tech_user =
+            prompts::tech_questions_user(&session.jd_text, &session.resume_text, tech_count);
         let tech_completion = self
             .provider
             .complete(
@@ -129,11 +127,8 @@ impl PrimingWorker {
 
         // 2. Generate the scoring rubric.
         let rubric_sys = prompts::rubric_system();
-        let rubric_user = prompts::rubric_user(
-            &session.jd_text,
-            &session.resume_text,
-            &session.role_title,
-        );
+        let rubric_user =
+            prompts::rubric_user(&session.jd_text, &session.resume_text, &session.role_title);
         let rubric_completion = self
             .provider
             .complete(
@@ -190,11 +185,7 @@ fn strip_code_fences(s: &str) -> String {
 
 /// Picks one random question per topic, deterministic per session_id so
 /// re-priming a session yields the same picks.
-fn pick_behavioral(
-    session_id: Uuid,
-    bank: &JsonValue,
-    desired_count: u16,
-) -> Vec<BehavioralPick> {
+fn pick_behavioral(session_id: Uuid, bank: &JsonValue, desired_count: u16) -> Vec<BehavioralPick> {
     let mut rng = ChaCha8Rng::seed_from_u64(uuid_seed(session_id));
 
     let mut by_topic: Vec<(Option<String>, Vec<String>)> = Vec::new();
@@ -210,7 +201,10 @@ fn pick_behavioral(
         JsonValue::Array(items) => {
             // Allow [{"topic": "...", "questions": [...]}] as an alternative shape.
             for item in items {
-                let topic = item.get("topic").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let topic = item
+                    .get("topic")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 let questions = item
                     .get("questions")
                     .map(json_to_string_list)
@@ -266,7 +260,6 @@ fn json_to_string_list(v: &JsonValue) -> Vec<String> {
 fn uuid_seed(id: Uuid) -> u64 {
     let bytes = id.as_bytes();
     u64::from_be_bytes([
-        bytes[0], bytes[1], bytes[2], bytes[3],
-        bytes[4], bytes[5], bytes[6], bytes[7],
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
     ])
 }

@@ -89,7 +89,11 @@ impl NonceStore {
             NonceStore::Redis(mgr) => {
                 let mut conn = mgr.clone();
                 let key = format!("nonce:{token}");
-                let raw: Option<String> = redis::cmd("GETDEL").arg(&key).query_async(&mut conn).await.ok()?;
+                let raw: Option<String> = redis::cmd("GETDEL")
+                    .arg(&key)
+                    .query_async(&mut conn)
+                    .await
+                    .ok()?;
                 raw.and_then(|s| Uuid::parse_str(&s).ok())
             }
         }

@@ -76,8 +76,7 @@ pub static AI_LATENCY_MS: Lazy<HistogramVec> = Lazy::new(|| {
 });
 
 pub static OUTBOX_PENDING: Lazy<Gauge> = Lazy::new(|| {
-    register_gauge!("outbox_pending", "Pending event_outbox rows")
-        .expect("register outbox_pending")
+    register_gauge!("outbox_pending", "Pending event_outbox rows").expect("register outbox_pending")
 });
 
 pub static OUTBOX_ATTEMPTS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -159,7 +158,9 @@ pub fn observe_ai_call(
     output_tokens: u64,
     latency_ms: f64,
 ) {
-    AI_REQUESTS_TOTAL.with_label_values(&[model, kind, status]).inc();
+    AI_REQUESTS_TOTAL
+        .with_label_values(&[model, kind, status])
+        .inc();
     AI_INPUT_TOKENS_TOTAL
         .with_label_values(&[model, kind])
         .inc_by(input_tokens as f64);
@@ -223,14 +224,20 @@ async fn handler() -> impl IntoResponse {
     let metric_families = registry().gather();
     let mut buf = Vec::with_capacity(4096);
     if let Err(e) = encoder.encode(&metric_families, &mut buf) {
-        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("encode: {e}"))
+        return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("encode: {e}"),
+        )
             .into_response();
     }
     // Also include the default global registry so we don't miss anything
     // libraries register there.
     let default = prometheus::gather();
     if let Err(e) = encoder.encode(&default, &mut buf) {
-        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("encode: {e}"))
+        return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("encode: {e}"),
+        )
             .into_response();
     }
     (

@@ -54,15 +54,24 @@ pub fn router(state: AppState) -> Router {
     // via the refresh cookie.
     let auth_routes = Router::new()
         .route("/v1/auth/login", post(controllers::auth_controller::login))
-        .route("/v1/auth/refresh", post(controllers::auth_controller::refresh))
-        .route("/v1/auth/logout", post(controllers::auth_controller::logout))
+        .route(
+            "/v1/auth/refresh",
+            post(controllers::auth_controller::refresh),
+        )
+        .route(
+            "/v1/auth/logout",
+            post(controllers::auth_controller::logout),
+        )
         .route(
             "/v1/auth/accept-invite",
             post(controllers::auth_controller::accept_invite),
         );
 
     let hr_protected = Router::new()
-        .route("/v1/interviews", post(controllers::interviews_controller::create))
+        .route(
+            "/v1/interviews",
+            post(controllers::interviews_controller::create),
+        )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_hr,
@@ -78,7 +87,8 @@ pub fn router(state: AppState) -> Router {
             auth::require_admin,
         ));
 
-    let rate_limit_layer = middleware::from_fn_with_state(state.clone(), crate::rate_limit::check_and_pass);
+    let rate_limit_layer =
+        middleware::from_fn_with_state(state.clone(), crate::rate_limit::check_and_pass);
 
     Router::new()
         .merge(public)
@@ -100,7 +110,13 @@ fn build_cors(cfg: &Settings) -> CorsLayer {
 
     CorsLayer::new()
         .allow_origin(origins)
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::PATCH,
+        ])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
         .allow_credentials(true)
         .max_age(Duration::from_secs(600))

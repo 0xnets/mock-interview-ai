@@ -30,8 +30,8 @@ pub async fn generate_and_insert(
     model: &str,
     parent_question_id: Uuid,
 ) -> anyhow::Result<QuestionRow> {
-    let inputs: FollowupInputs = repo_realtime::find_followup_inputs(pool, parent_question_id)
-        .await?;
+    let inputs: FollowupInputs =
+        repo_realtime::find_followup_inputs(pool, parent_question_id).await?;
 
     let sys = prompts::followup_system();
     let user = prompts::followup_user(

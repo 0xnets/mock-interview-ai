@@ -6,7 +6,9 @@
 use std::io::BufWriter;
 
 use anyhow::{Context, Result};
-use printpdf::{BuiltinFont, IndirectFontRef, Mm, PdfDocument, PdfDocumentReference, PdfLayerReference};
+use printpdf::{
+    BuiltinFont, IndirectFontRef, Mm, PdfDocument, PdfDocumentReference, PdfLayerReference,
+};
 use serde_json::Value as JsonValue;
 
 use persistence::repo_reports::ReportForRender;
@@ -54,10 +56,13 @@ impl Cursor {
         for chunk in wrap(text, max_chars_for(size)) {
             self.ensure_room(doc, line_h + 1.0);
             if let Some((r, g, b)) = color {
-                self.layer.set_fill_color(printpdf::Color::Rgb(printpdf::Rgb::new(r, g, b, None)));
+                self.layer
+                    .set_fill_color(printpdf::Color::Rgb(printpdf::Rgb::new(r, g, b, None)));
             } else {
                 self.layer
-                    .set_fill_color(printpdf::Color::Rgb(printpdf::Rgb::new(0.16, 0.16, 0.16, None)));
+                    .set_fill_color(printpdf::Color::Rgb(printpdf::Rgb::new(
+                        0.16, 0.16, 0.16, None,
+                    )));
             }
             self.layer.use_text(
                 chunk,
@@ -335,7 +340,9 @@ fn answer_time_summary(raw: &JsonValue) -> Option<String> {
     if answered <= 0 {
         return None;
     }
-    let total = raw.get("total_answer_time_seconds").and_then(|v| v.as_i64())?;
+    let total = raw
+        .get("total_answer_time_seconds")
+        .and_then(|v| v.as_i64())?;
     let avg = raw
         .get("average_answer_time_seconds")
         .and_then(|v| v.as_i64())?;

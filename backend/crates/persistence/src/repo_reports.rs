@@ -27,10 +27,7 @@ pub struct ReportForRender {
     pub mail_status: String,
 }
 
-pub async fn fetch_for_render(
-    pool: &PgPool,
-    session_id: Uuid,
-) -> Result<ReportForRender, DbError> {
+pub async fn fetch_for_render(pool: &PgPool, session_id: Uuid) -> Result<ReportForRender, DbError> {
     let row = sqlx::query(
         r#"
         SELECT s.id, s.candidate_name, s.role_title, s.hr_email, s.pass_threshold,
@@ -82,11 +79,7 @@ pub async fn mark_mail_sent(pool: &PgPool, session_id: Uuid) -> Result<(), DbErr
     Ok(())
 }
 
-pub async fn mark_mail_failed(
-    pool: &PgPool,
-    session_id: Uuid,
-    err: &str,
-) -> Result<(), DbError> {
+pub async fn mark_mail_failed(pool: &PgPool, session_id: Uuid, err: &str) -> Result<(), DbError> {
     sqlx::query(
         r#"
         UPDATE reports

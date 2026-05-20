@@ -41,7 +41,10 @@ pub async fn create(
 ) -> ApiResult<impl IntoResponse> {
     validate_create(&body)?;
 
-    let tech_count = body.tech_count.unwrap_or(10).clamp(MIN_TECH_COUNT, MAX_TECH_COUNT);
+    let tech_count = body
+        .tech_count
+        .unwrap_or(10)
+        .clamp(MIN_TECH_COUNT, MAX_TECH_COUNT);
     let behavioral_count = body
         .behavioral_count
         .unwrap_or(3)
@@ -174,7 +177,10 @@ pub async fn finalize(
         .await;
     }
     // Re-load so we pick up the just-written grade rows.
-    if !graded.iter().all(|q| q.grade.is_some() || q.answer_text.trim().is_empty()) {
+    if !graded
+        .iter()
+        .all(|q| q.grade.is_some() || q.answer_text.trim().is_empty())
+    {
         graded = repo_realtime::load_graded_session(&state.pools.read, id).await?;
     }
 
@@ -213,7 +219,12 @@ pub async fn finalize(
 
     let completion = state
         .provider
-        .complete(&sys, &user, Budget::scoring(), &state.cfg.anthropic_model_scoring)
+        .complete(
+            &sys,
+            &user,
+            Budget::scoring(),
+            &state.cfg.anthropic_model_scoring,
+        )
         .await
         .map_err(|e| ApiError::Internal(format!("AI summary failed: {e}")))?;
 

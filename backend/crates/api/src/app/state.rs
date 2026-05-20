@@ -8,7 +8,9 @@ use tokio::sync::Notify;
 use crate::{
     auth::JwtKeys,
     config::Settings,
-    infrastructure::{kms::CheckpointSigner, redis_backplane::RedisBackplane, signing::TranscriptSigner},
+    infrastructure::{
+        kms::CheckpointSigner, redis_backplane::RedisBackplane, signing::TranscriptSigner,
+    },
     rate_limit::InMemoryWindow,
     realtime,
 };

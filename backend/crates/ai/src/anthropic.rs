@@ -90,10 +90,7 @@ impl AiProvider for AnthropicProvider {
         }
 
         let parsed: MessagesResponse = serde_json::from_str(&body_text).map_err(|e| {
-            AiError::InvalidJson(format!(
-                "envelope: {e}; body={}",
-                truncate(&body_text, 400)
-            ))
+            AiError::InvalidJson(format!("envelope: {e}; body={}", truncate(&body_text, 400)))
         })?;
         let text_full = parsed
             .content

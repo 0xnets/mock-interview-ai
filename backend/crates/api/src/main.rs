@@ -46,11 +46,8 @@ async fn main() -> anyhow::Result<()> {
         AnthropicProvider::new(&cfg.anthropic_api_key).context("init Anthropic provider")?,
     ) as Arc<dyn ai::AiProvider>;
 
-    let priming = workers::priming::PrimingWorker::new(
-        pools.primary.clone(),
-        provider.clone(),
-        cfg.clone(),
-    );
+    let priming =
+        workers::priming::PrimingWorker::new(pools.primary.clone(), provider.clone(), cfg.clone());
     let prime_notify = priming.notify_handle();
     tokio::spawn(async move {
         priming.run().await;
@@ -99,11 +96,8 @@ async fn main() -> anyhow::Result<()> {
 
     let mailer = Arc::new(workers::mailer::Mailer::new(cfg.clone()));
 
-    let outbox = workers::outbox::OutboxWorker::new(
-        pools.primary.clone(),
-        cfg.clone(),
-        mailer.clone(),
-    );
+    let outbox =
+        workers::outbox::OutboxWorker::new(pools.primary.clone(), cfg.clone(), mailer.clone());
     tokio::spawn(async move {
         outbox.run().await;
     });
@@ -116,7 +110,13 @@ async fn main() -> anyhow::Result<()> {
             let consumer_id = format!("api-{}", uuid::Uuid::new_v4().simple());
             let backplane = (*r).clone();
             tokio::spawn(async move {
-                infrastructure::streams::outbox_consumer_loop(backplane, pool, cfg_consumer, consumer_id).await;
+                infrastructure::streams::outbox_consumer_loop(
+                    backplane,
+                    pool,
+                    cfg_consumer,
+                    consumer_id,
+                )
+                .await;
             });
         }
     }
@@ -147,7 +147,10 @@ async fn main() -> anyhow::Result<()> {
 
     // ─── Phase 6: separate Prometheus listener ─────────────────────────────
     let metrics_router = infrastructure::metrics::router();
-    let metrics_addr: SocketAddr = cfg.metrics_listen_addr.parse().context("invalid METRICS_LISTEN_ADDR")?;
+    let metrics_addr: SocketAddr = cfg
+        .metrics_listen_addr
+        .parse()
+        .context("invalid METRICS_LISTEN_ADDR")?;
     tokio::spawn(async move {
         info!(%metrics_addr, "prometheus /metrics listening");
         match tokio::net::TcpListener::bind(metrics_addr).await {
@@ -177,7 +180,9 @@ async fn main() -> anyhow::Result<()> {
 
 async fn shutdown_signal() {
     let ctrl_c = async {
-        tokio::signal::ctrl_c().await.expect("install Ctrl+C handler");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("install Ctrl+C handler");
     };
     #[cfg(unix)]
     let terminate = async {

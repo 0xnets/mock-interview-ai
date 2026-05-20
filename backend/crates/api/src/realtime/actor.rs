@@ -17,10 +17,10 @@ use persistence::PgPool;
 use uuid::Uuid;
 
 use crate::config::Settings;
+use crate::infrastructure::signing::TranscriptSigner;
 use crate::realtime::followup;
 use crate::realtime::grade;
 use crate::realtime::protocol::{ClientMsg, ServerMsg};
-use crate::infrastructure::signing::TranscriptSigner;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(20);
 
@@ -245,9 +245,10 @@ impl SessionActor {
                 }
                 Ok(())
             }
-            ClientMsg::Submit { ordinal, duration_ms } => {
-                self.handle_submit(ordinal, duration_ms).await
-            }
+            ClientMsg::Submit {
+                ordinal,
+                duration_ms,
+            } => self.handle_submit(ordinal, duration_ms).await,
             ClientMsg::Skip { ordinal, .. } => {
                 // Treat skip like submit with empty answer.
                 self.finals.insert(ordinal, String::new());
@@ -258,11 +259,7 @@ impl SessionActor {
     }
 
     async fn handle_submit(&mut self, ordinal: i16, duration_ms: i32) -> anyhow::Result<()> {
-        let Some(idx) = self
-            .questions
-            .iter()
-            .position(|q| q.ordinal == ordinal)
-        else {
+        let Some(idx) = self.questions.iter().position(|q| q.ordinal == ordinal) else {
             return self
                 .send(ServerMsg::Error {
                     code: "UNKNOWN_ORDINAL".into(),
@@ -435,19 +432,20 @@ impl SessionActor {
             return;
         }
 
-        let pointer = match repo_transcript::latest_chunk_pointer(&self.deps.pool, self.session.id).await {
-            Ok(Some(p)) => p,
-            Ok(None) => return,
-            Err(e) => {
-                tracing::warn!(error=%e, "latest_chunk_pointer failed");
-                return;
-            }
-        };
+        let pointer =
+            match repo_transcript::latest_chunk_pointer(&self.deps.pool, self.session.id).await {
+                Ok(Some(p)) => p,
+                Ok(None) => return,
+                Err(e) => {
+                    tracing::warn!(error=%e, "latest_chunk_pointer failed");
+                    return;
+                }
+            };
         let (last_row_id, last_seq, row_hash) = pointer;
-        let signature = self
-            .deps
-            .signer
-            .sign_checkpoint(&self.session.id.to_string(), last_seq, &row_hash);
+        let signature =
+            self.deps
+                .signer
+                .sign_checkpoint(&self.session.id.to_string(), last_seq, &row_hash);
         let chunk_count = self.pending_checkpoint_chunks;
         if let Err(e) = repo_transcript::insert_checkpoint(
             &self.deps.pool,

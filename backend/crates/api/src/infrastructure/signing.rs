@@ -18,8 +18,7 @@ pub struct TranscriptSigner {
 
 impl TranscriptSigner {
     pub fn from_env() -> Result<Self> {
-        let key_id =
-            std::env::var("TRANSCRIPT_KEY_ID").unwrap_or_else(|_| "dev-v1".to_string());
+        let key_id = std::env::var("TRANSCRIPT_KEY_ID").unwrap_or_else(|_| "dev-v1".to_string());
         let signing = match std::env::var("TRANSCRIPT_SIGNING_SECRET_HEX") {
             Ok(hex_secret) => {
                 let bytes = hex::decode(hex_secret.trim())
@@ -37,11 +36,8 @@ impl TranscriptSigner {
             Err(_) => {
                 // Deterministic dev fallback. Same seed across restarts so a
                 // freshly migrated DB still verifies. Never use in prod.
-                tracing::warn!(
-                    "TRANSCRIPT_SIGNING_SECRET_HEX not set; using insecure dev key"
-                );
-                let seed: [u8; SECRET_KEY_LENGTH] =
-                    *b"mock-interview-dev-signing-key!!";
+                tracing::warn!("TRANSCRIPT_SIGNING_SECRET_HEX not set; using insecure dev key");
+                let seed: [u8; SECRET_KEY_LENGTH] = *b"mock-interview-dev-signing-key!!";
                 SigningKey::from_bytes(&seed)
             }
         };
@@ -76,4 +72,3 @@ impl TranscriptSigner {
         self.signing.sign(&buf).to_bytes().to_vec()
     }
 }
-

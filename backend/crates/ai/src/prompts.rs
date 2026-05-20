@@ -245,7 +245,10 @@ mod tests {
             p.contains("80%") && p.contains("20%"),
             "prompt must spell out the 80/20 JD:resume weighting"
         );
-        assert!(lc.contains("seniority"), "must mention seniority calibration");
+        assert!(
+            lc.contains("seniority"),
+            "must mention seniority calibration"
+        );
         assert!(
             lc.contains("do not")
                 && (lc.contains("resume-only")
@@ -259,7 +262,9 @@ mod tests {
     fn tech_questions_user_orders_jd_first_with_weighting() {
         let user = tech_questions_user("JD_BODY_MARKER", "RESUME_BODY_MARKER", 5);
         let jd_pos = user.find("JD_BODY_MARKER").expect("JD marker present");
-        let resume_pos = user.find("RESUME_BODY_MARKER").expect("resume marker present");
+        let resume_pos = user
+            .find("RESUME_BODY_MARKER")
+            .expect("resume marker present");
 
         assert!(jd_pos < resume_pos, "JD block must precede resume block");
         assert!(user.contains("JOB_DESCRIPTION"));

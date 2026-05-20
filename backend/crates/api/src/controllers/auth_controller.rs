@@ -40,7 +40,9 @@ pub async fn login(
 ) -> ApiResult<impl IntoResponse> {
     let email = body.email.trim().to_lowercase();
     if email.is_empty() || body.password.is_empty() {
-        return Err(ApiError::BadRequest("email and password are required".into()));
+        return Err(ApiError::BadRequest(
+            "email and password are required".into(),
+        ));
     }
 
     let event_id = Uuid::new_v4();
@@ -74,7 +76,17 @@ pub async fn login(
         return Err(ApiError::Unauthorized);
     }
 
-    auth_session::issue_tokens(&state, &account.id, &account.role, &account.display_name, jar, &headers, event_id, None).await
+    auth_session::issue_tokens(
+        &state,
+        &account.id,
+        &account.role,
+        &account.display_name,
+        jar,
+        &headers,
+        event_id,
+        None,
+    )
+    .await
 }
 
 async fn audit_login_failed(
@@ -124,7 +136,8 @@ pub async fn refresh(
         Ok(id) => id,
         Err(_) => {
             if let Ok(row) = repo_auth::lookup_refresh_token(&state.pools.primary, &raw).await {
-                let _ = repo_auth::revoke_all_for_account(&state.pools.primary, row.account_id).await;
+                let _ =
+                    repo_auth::revoke_all_for_account(&state.pools.primary, row.account_id).await;
                 let _ = repo_audit::write(
                     &state.pools.primary,
                     Some(row.account_id),
@@ -160,10 +173,7 @@ pub async fn refresh(
 
 // ─── logout ─────────────────────────────────────────────────────────────────
 
-pub async fn logout(
-    State(state): State<AppState>,
-    jar: CookieJar,
-) -> ApiResult<impl IntoResponse> {
+pub async fn logout(State(state): State<AppState>, jar: CookieJar) -> ApiResult<impl IntoResponse> {
     if let Some(c) = jar.get(REFRESH_COOKIE) {
         let _ = repo_auth::revoke_refresh_token(&state.pools.primary, c.value()).await;
     }
