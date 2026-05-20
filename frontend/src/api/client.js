@@ -11,7 +11,6 @@ import {
 /** @typedef {import('./types.js').InviteCreateRequest} InviteCreateRequest */
 /** @typedef {import('./types.js').InviteCreateResponse} InviteCreateResponse */
 /** @typedef {import('./types.js').AcceptInviteRequest} AcceptInviteRequest */
-/** @typedef {import('./types.js').ReportStatusResponse} ReportStatusResponse */
 /** @typedef {import('./types.js').TranscriptExport} TranscriptExport */
 
 export function baseUrl() {
@@ -201,30 +200,6 @@ export async function finalizeInterview(sessionId) {
     method: 'POST',
     auth: 'optional',
   });
-}
-
-/** @returns {Promise<ReportStatusResponse>} */
-export async function getReportStatus(sessionId) {
-  return apiFetch(`/v1/interviews/${encodeURIComponent(sessionId)}/report.status`, { auth: 'optional' });
-}
-
-/// Poll report.status until ready or timeout.
-export async function waitForReportReady(sessionId, { onTick, intervalMs = 2000, timeoutMs = 120_000 } = {}) {
-  const started = Date.now();
-  let attempt = 0;
-  while (true) {
-    attempt += 1;
-    const status = await getReportStatus(sessionId);
-    if (onTick) onTick({ status, attempt });
-    if (status.ready) return status;
-    if (status.pdf_status === 'failed') {
-      throw new Error('Report generation failed on the backend.');
-    }
-    if (Date.now() - started > timeoutMs) {
-      throw new Error('Timed out waiting for report to be ready.');
-    }
-    await new Promise(r => setTimeout(r, intervalMs));
-  }
 }
 
 /** @returns {Promise<TranscriptExport>} */

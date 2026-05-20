@@ -34,7 +34,6 @@ jobs:
       DATABASE_URL: postgres://mockinterview:mockinterview@localhost:5432/mockinterview
       REDIS_URL: redis://localhost:6379
       ANTHROPIC_API_KEY: dev-key
-      HR_DEV_TOKEN: replace-me-with-a-32-byte-secret-12345678
       JWT_SIGNING_SECRET: replace-me-with-a-32-byte-secret-12345678
       RUST_BACKTRACE: 1
     steps:
@@ -110,7 +109,6 @@ jobs:
     env:
       DATABASE_URL: postgres://mockinterview:mockinterview@localhost:5432/mockinterview
       ANTHROPIC_API_KEY: dev-key
-      HR_DEV_TOKEN: replace-me-with-a-32-byte-secret-12345678
       JWT_SIGNING_SECRET: replace-me-with-a-32-byte-secret-12345678
       FEATURE_SERVER_PDF: "false"
       FEATURE_BACKEND_MAILER: "false"

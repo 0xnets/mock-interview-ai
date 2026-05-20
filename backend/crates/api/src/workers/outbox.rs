@@ -1,9 +1,8 @@
-//! Phase 5: polling outbox dispatcher.
+//! Polling outbox dispatcher.
 //!
 //! Claims pending `event_outbox` rows under a short lease, routes by topic,
 //! and either marks the row dispatched or schedules a backoff retry. The
-//! lease lets us run multiple replicas safely (Phase 6 will replace this
-//! with Redis Streams).
+//! lease lets us run multiple replicas safely.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,14 +14,11 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::config::Settings;
-use crate::storage::BlobStore;
 use crate::workers::mailer::Mailer;
-use crate::workers::pdf_job::PdfJob;
 
 pub struct OutboxWorker {
     pool: PgPool,
     cfg: Settings,
-    blob: Option<Arc<BlobStore>>,
     mailer: Arc<Mailer>,
 }
 
@@ -32,18 +28,8 @@ struct SessionPayload {
 }
 
 impl OutboxWorker {
-    pub fn new(
-        pool: PgPool,
-        cfg: Settings,
-        blob: Option<Arc<BlobStore>>,
-        mailer: Arc<Mailer>,
-    ) -> Self {
-        Self {
-            pool,
-            cfg,
-            blob,
-            mailer,
-        }
+    pub fn new(pool: PgPool, cfg: Settings, mailer: Arc<Mailer>) -> Self {
+        Self { pool, cfg, mailer }
     }
 
     pub async fn run(self) {
@@ -91,28 +77,6 @@ impl OutboxWorker {
         tracing::debug!(%id, %topic, attempts, "outbox dispatch");
 
         let result: anyhow::Result<()> = match topic.as_str() {
-            "report.generate_pdf" => {
-                let payload: SessionPayload = match serde_json::from_value(row.payload.clone()) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        repo_outbox::mark_failed(
-                            &self.pool,
-                            id,
-                            &format!("bad payload: {e}"),
-                            ChronoDuration::hours(24),
-                        )
-                        .await
-                        .ok();
-                        return;
-                    }
-                };
-                let job = PdfJob {
-                    pool: &self.pool,
-                    cfg: &self.cfg,
-                    blob: self.blob.as_deref(),
-                };
-                job.run(payload.session_id).await
-            }
             "mail.report" => {
                 let payload: SessionPayload = match serde_json::from_value(row.payload.clone()) {
                     Ok(p) => p,

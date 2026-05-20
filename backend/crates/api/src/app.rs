@@ -23,7 +23,6 @@ use crate::{
     realtime,
     redis_backplane::RedisBackplane,
     signing::TranscriptSigner,
-    storage::BlobStore,
 };
 
 #[derive(Clone)]
@@ -35,7 +34,6 @@ pub struct AppState {
     pub nonces: Arc<realtime::NonceStore>,
     pub signer: Arc<TranscriptSigner>,
     pub kms_signer: Arc<dyn CheckpointSigner>,
-    pub blob_store: Option<Arc<BlobStore>>,
     pub redis: Option<Arc<RedisBackplane>>,
     pub jwt: Option<Arc<JwtKeys>>,
     pub rate_limit_mem: Arc<InMemoryWindow>,
@@ -70,10 +68,6 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/v1/interviews/{id}/report.pdf",
             get(handlers::reports::get_report_pdf),
-        )
-        .route(
-            "/v1/interviews/{id}/report.status",
-            get(handlers::reports::get_report_status),
         );
 
     // Phase 6: auth surface. Login + refresh + invite are public-ish (they
@@ -147,9 +141,7 @@ async fn readyz(State(state): State<AppState>) -> impl IntoResponse {
         None => true,
     };
 
-    let s3_ok = state.blob_store.is_some() || !state.cfg.feature_server_pdf;
-
-    let ok = db_ok && redis_ok && s3_ok;
+    let ok = db_ok && redis_ok;
     let status = if ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
     (
         status,
@@ -157,7 +149,6 @@ async fn readyz(State(state): State<AppState>) -> impl IntoResponse {
             "ok": ok,
             "db": db_ok,
             "redis": redis_ok,
-            "s3": s3_ok,
         })),
     )
 }

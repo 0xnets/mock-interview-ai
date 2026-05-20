@@ -30,24 +30,6 @@ services:
       timeout: 3s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
-    container_name: mockinterview-minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: mockinterview
-      MINIO_ROOT_PASSWORD: mockinterview-secret
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - miniodata:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   # Phase 6: OpenTelemetry Collector receives OTLP from the api binary and
   # forwards to whatever backend the dev wants to point it at (Tempo, Honeycomb,
   # Jaeger, …). The default config exports to stdout so traces are visible in
@@ -82,5 +64,4 @@ services:
 volumes:
   pgdata:
   redisdata:
-  miniodata:
   promdata:

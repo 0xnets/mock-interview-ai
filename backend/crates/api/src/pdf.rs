@@ -154,6 +154,9 @@ pub fn render_report_pdf(r: &ReportForRender) -> Result<Vec<u8>> {
         false,
         None,
     );
+    if let Some(timing) = answer_time_summary(&r.raw_ai_output) {
+        c.write_line(&doc, &timing, 10.0, false, Some((0.30, 0.30, 0.30)));
+    }
     c.spacer(3.0);
 
     section(&doc, &mut c, "Summary");
@@ -203,6 +206,20 @@ pub fn render_report_pdf(r: &ReportForRender) -> Result<Vec<u8>> {
             }
             if !feedback.is_empty() {
                 c.write_line(&doc, &format!("Feedback: {feedback}"), 9.0, false, None);
+            }
+            if let Some(secs) = it.get("duration_seconds").and_then(|v| v.as_i64()) {
+                let bucket = it
+                    .get("time_bucket")
+                    .and_then(|v| v.as_str())
+                    .map(|b| format!(" ({})", b.replace('_', " ")))
+                    .unwrap_or_default();
+                c.write_line(
+                    &doc,
+                    &format!("Time: {}{}", format_duration(secs), bucket),
+                    9.0,
+                    false,
+                    Some((0.45, 0.45, 0.45)),
+                );
             }
             c.spacer(1.5);
         }
@@ -288,4 +305,96 @@ fn pdf_to_writer(doc: PdfDocumentReference) -> Result<Vec<u8>> {
         doc.save(&mut w).context("printpdf save")?;
     }
     Ok(buf)
+}
+
+/// Human-readable answer duration: `45s`, `1m 24s`, `1h 03m`. Seconds are
+/// zero-padded once minutes are shown so values line up; negative input (a
+/// broken client clock) is clamped to zero.
+fn format_duration(total_seconds: i64) -> String {
+    let s = total_seconds.max(0);
+    let h = s / 3600;
+    let m = (s % 3600) / 60;
+    let sec = s % 60;
+    if h > 0 {
+        format!("{h}h {m:02}m")
+    } else if m > 0 {
+        format!("{m}m {sec:02}s")
+    } else {
+        format!("{sec}s")
+    }
+}
+
+/// Builds the "Total answer time … | Average …" header line from the timing
+/// fields `finalize` stores in `raw_ai_output`. Returns `None` for older
+/// reports that predate those fields or when nothing was answered.
+fn answer_time_summary(raw: &JsonValue) -> Option<String> {
+    let answered = raw
+        .get("answered_count")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    if answered <= 0 {
+        return None;
+    }
+    let total = raw.get("total_answer_time_seconds").and_then(|v| v.as_i64())?;
+    let avg = raw
+        .get("average_answer_time_seconds")
+        .and_then(|v| v.as_i64())?;
+    Some(format!(
+        "Total answer time: {}   |   Average: {}",
+        format_duration(total),
+        format_duration(avg),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_duration_sub_minute() {
+        assert_eq!(format_duration(0), "0s");
+        assert_eq!(format_duration(9), "9s");
+        assert_eq!(format_duration(59), "59s");
+    }
+
+    #[test]
+    fn format_duration_minutes_zero_pads_seconds() {
+        assert_eq!(format_duration(84), "1m 24s");
+        assert_eq!(format_duration(64), "1m 04s");
+        assert_eq!(format_duration(600), "10m 00s");
+    }
+
+    #[test]
+    fn format_duration_hours() {
+        assert_eq!(format_duration(3600), "1h 00m");
+        assert_eq!(format_duration(3720), "1h 02m");
+        assert_eq!(format_duration(7380), "2h 03m");
+    }
+
+    #[test]
+    fn format_duration_negative_clamps_to_zero() {
+        assert_eq!(format_duration(-5), "0s");
+    }
+
+    #[test]
+    fn answer_time_summary_present() {
+        let raw = serde_json::json!({
+            "answered_count": 3,
+            "total_answer_time_seconds": 252,
+            "average_answer_time_seconds": 84,
+        });
+        assert_eq!(
+            answer_time_summary(&raw).as_deref(),
+            Some("Total answer time: 4m 12s   |   Average: 1m 24s"),
+        );
+    }
+
+    #[test]
+    fn answer_time_summary_absent_for_old_or_empty_reports() {
+        assert_eq!(answer_time_summary(&serde_json::json!({})), None);
+        assert_eq!(
+            answer_time_summary(&serde_json::json!({ "answered_count": 0 })),
+            None,
+        );
+    }
 }

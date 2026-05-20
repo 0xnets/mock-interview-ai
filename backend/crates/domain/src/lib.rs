@@ -69,7 +69,6 @@ pub struct InterviewSession {
     pub id: Uuid,
     pub account_id: Uuid,
     pub candidate_name: String,
-    pub candidate_email: Option<String>,
     pub role_title: String,
     pub state: SessionState,
     pub shortcode: String,

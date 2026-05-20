@@ -321,6 +321,9 @@ pub struct GradedQuestion {
     pub kind: String,
     pub prompt_text: String,
     pub answer_text: String,
+    /// Time the candidate took between question display and submit, in
+    /// milliseconds. `None` when the question has no answer row.
+    pub duration_ms: Option<i32>,
     pub grade: Option<GradeRow>,
 }
 
@@ -345,6 +348,7 @@ pub async fn load_graded_session(
         String,
         String,
         Option<String>,
+        Option<i32>,
         Option<i16>,
         Option<String>,
         Option<String>,
@@ -352,7 +356,7 @@ pub async fn load_graded_session(
     )> = sqlx::query_as(
         r#"
         SELECT q.id, q.ordinal, q.kind, q.prompt_text,
-               a.transcript_text,
+               a.transcript_text, a.duration_ms,
                g.score, g.reasoning, g.model, g.prompt_version
         FROM questions q
         LEFT JOIN answers a ON a.question_id = q.id
@@ -368,7 +372,18 @@ pub async fn load_graded_session(
     Ok(rows
         .into_iter()
         .map(
-            |(id, ordinal, kind, prompt_text, answer_text, score, reasoning, model, prompt_version)| {
+            |(
+                id,
+                ordinal,
+                kind,
+                prompt_text,
+                answer_text,
+                duration_ms,
+                score,
+                reasoning,
+                model,
+                prompt_version,
+            )| {
                 let grade = match (score, reasoning, model, prompt_version) {
                     (Some(s), Some(r), Some(m), Some(v)) => Some(GradeRow {
                         score: s,
@@ -384,6 +399,7 @@ pub async fn load_graded_session(
                     kind,
                     prompt_text,
                     answer_text: answer_text.unwrap_or_default(),
+                    duration_ms,
                     grade,
                 }
             },

@@ -1,5 +1,4 @@
-//! Phase 6 auth: JWT bearer + RBAC, with dual-acceptance for the legacy
-//! `HR_DEV_TOKEN` during the 1-week cutover window.
+//! Auth: JWT bearer tokens + RBAC.
 //!
 //! Access tokens are short-lived (15 min). Refresh tokens are long-lived
 //! (14 days), rotating: every successful `/v1/auth/refresh` issues a new pair
@@ -51,6 +50,8 @@ pub struct JwtKeys {
 
 impl JwtKeys {
     pub fn from_env() -> Result<Self> {
+        // JWT_SIGNING_SECRET signs access tokens. HR_DEV_TOKEN is accepted as a
+        // dev-only fallback so a single secret works out of the box.
         let secret = std::env::var("JWT_SIGNING_SECRET")
             .or_else(|_| std::env::var("HR_DEV_TOKEN"))
             .context("JWT_SIGNING_SECRET must be set")?;
@@ -103,16 +104,12 @@ pub struct Principal {
     pub account_id: Uuid,
     pub role: String,
     /// Request-correlation id from the access token's `sid`, used for audit
-    /// log linkage. For the dev-token fallback it's a freshly-minted uuid.
+    /// log linkage.
     pub event_id: Uuid,
-    /// Set when this principal came from the legacy `HR_DEV_TOKEN` cutover
-    /// path so logs can flag dual-auth usage during the migration window.
-    pub legacy: bool,
 }
 
-/// Bridge for handlers that need to keep working with the old `HrPrincipal`
-/// surface during the cutover. `HrPrincipal { account_id }` is just a
-/// projection of `Principal`.
+/// Bridge for handlers that consume the `HrPrincipal` extractor.
+/// `HrPrincipal { account_id }` is just a projection of `Principal`.
 #[derive(Debug, Clone, Copy)]
 pub struct HrPrincipal {
     pub account_id: Uuid,
@@ -172,10 +169,10 @@ pub async fn require_admin(
     Ok(next.run(req).await)
 }
 
+/// A valid JWT access token is the only accepted credential.
 async fn authenticate(state: &AppState, headers: &HeaderMap) -> Result<Principal, ApiError> {
     let raw = bearer_token(headers).ok_or(ApiError::Unauthorized)?;
 
-    // 1. JWT path (Phase 6 default).
     if state.cfg.feature_jwt_auth {
         if let Some(keys) = state.jwt.as_ref() {
             if let Ok(claims) = keys.verify_access(&raw) {
@@ -191,27 +188,9 @@ async fn authenticate(state: &AppState, headers: &HeaderMap) -> Result<Principal
                     account_id,
                     role: claims.role,
                     event_id,
-                    legacy: false,
                 });
             }
         }
-    }
-
-    // 2. Legacy HR_DEV_TOKEN cutover path. Stays accepted while
-    //    FEATURE_LEGACY_HR_TOKEN is on (default true; flip off after 1 week).
-    if state.cfg.feature_legacy_hr_token
-        && constant_time_eq(raw.as_bytes(), state.cfg.hr_dev_token.as_bytes())
-    {
-        tracing::warn!(
-            target: "auth.legacy",
-            "request authenticated with legacy HR_DEV_TOKEN; flip FEATURE_LEGACY_HR_TOKEN=false to disable"
-        );
-        return Ok(Principal {
-            account_id: state.cfg.default_account_id,
-            role: "hr".into(),
-            event_id: Uuid::new_v4(),
-            legacy: true,
-        });
     }
 
     Err(ApiError::Unauthorized)
@@ -225,17 +204,6 @@ fn bearer_token(headers: &HeaderMap) -> Option<String> {
         return None;
     }
     Some(token.trim().to_string())
-}
-
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff: u8 = 0;
-    for (x, y) in a.iter().zip(b.iter()) {
-        diff |= x ^ y;
-    }
-    diff == 0
 }
 
 impl<S> FromRequestParts<S> for Principal
@@ -307,4 +275,45 @@ pub fn now_unix() -> i64 {
 #[allow(dead_code)]
 pub fn audit_roles() -> HashSet<&'static str> {
     HashSet::from(["hr", "admin", "super_admin"])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_keys() -> JwtKeys {
+        let secret = b"unit-test-jwt-signing-secret-32-bytes";
+        JwtKeys {
+            enc: EncodingKey::from_secret(secret),
+            dec: DecodingKey::from_secret(secret),
+            issuer: "mock-interview-ai".to_string(),
+            kid: "v1".to_string(),
+        }
+    }
+
+    /// A raw `HR_DEV_TOKEN`-style bearer value is not a JWT. With the legacy
+    /// bearer-token path removed, `verify_access` is the only credential gate,
+    /// so such a token must be rejected.
+    #[test]
+    fn raw_hr_dev_token_is_rejected() {
+        let keys = test_keys();
+        let raw_hr_dev_token = "replace-me-with-a-32-byte-secret-12345678";
+        assert!(keys.verify_access(raw_hr_dev_token).is_err());
+    }
+
+    /// Sanity check: a properly minted access token is still accepted, so the
+    /// rejection above is about token shape, not a broken test harness.
+    #[test]
+    fn minted_access_token_is_accepted() {
+        let keys = test_keys();
+        let account_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+        let token = keys
+            .mint_access(account_id, "hr", session_id, Duration::minutes(15))
+            .expect("mint access token");
+        let claims = keys.verify_access(&token).expect("verify access token");
+        assert_eq!(claims.sub, account_id.to_string());
+        assert_eq!(claims.role, "hr");
+        assert_eq!(claims.sid, session_id.to_string());
+    }
 }

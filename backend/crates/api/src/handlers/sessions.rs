@@ -62,22 +62,18 @@ pub struct JoinNonceResponse {
 /// session is still `pending` so the client can connect immediately; the WS
 /// actor will wait for the session to become `primed` before sending
 /// questions (Phase 5 will refine the pending-state UX).
+///
+/// The shortcode link is strictly one-use: this call atomically consumes it,
+/// so the first candidate join wins and every later attempt with the same
+/// code is rejected with `409 CONFLICT`, even before the session expires.
 pub async fn issue_join_nonce(
     State(state): State<AppState>,
     Path(code): Path<String>,
 ) -> ApiResult<Json<JoinNonceResponse>> {
     let code = sanitize_code(&code).ok_or(ApiError::NotFound)?;
-    let session = repo_session::find_by_shortcode(&state.pools.read, &code).await?;
-
-    if session.expires_at < Utc::now() {
-        return Err(ApiError::NotFound);
-    }
-    match session.state.as_str() {
-        "primed" | "active" | "paused" | "pending" => {}
-        _ => {
-            return Err(ApiError::Conflict);
-        }
-    }
+    // Consume the link first; only mint a nonce for the caller that won the
+    // claim. A loser (Conflict) must never receive a usable nonce.
+    let session = repo_session::consume_shortlink(&state.pools.primary, &code).await?;
 
     let nonce = state
         .nonces

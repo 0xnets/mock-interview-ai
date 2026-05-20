@@ -20,7 +20,6 @@ mod realtime;
 mod redis_backplane;
 mod shortcode;
 mod signing;
-mod storage;
 mod streams;
 mod workers;
 
@@ -102,24 +101,11 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!(error=%e, "key_versions upsert failed");
     }
 
-    let blob_store = match storage::BlobStore::from_settings(&cfg) {
-        Ok(Some(b)) => Some(Arc::new(b)),
-        Ok(None) => {
-            tracing::warn!("S3_BUCKET not set; PDF rendering will fail until configured");
-            None
-        }
-        Err(e) => {
-            tracing::error!(error=%e, "failed to initialize blob store");
-            None
-        }
-    };
-
     let mailer = Arc::new(workers::mailer::Mailer::new(cfg.clone()));
 
     let outbox = workers::outbox::OutboxWorker::new(
         pools.primary.clone(),
         cfg.clone(),
-        blob_store.clone(),
         mailer.clone(),
     );
     tokio::spawn(async move {
@@ -157,7 +143,6 @@ async fn main() -> anyhow::Result<()> {
         nonces,
         signer: env_signer,
         kms_signer,
-        blob_store,
         redis,
         jwt,
         rate_limit_mem,

@@ -38,7 +38,6 @@ ed25519-dalek = { version = "2", features = ["rand_core", "pkcs8", "pem"] }
 hex = "0.4"
 base64 = "0.22"
 printpdf = "0.7"
-rust-s3 = { version = "0.34", default-features = false, features = ["tokio-rustls-tls"] }
 # Phase 6 additions
 jsonwebtoken = "9"
 argon2 = "0.5"

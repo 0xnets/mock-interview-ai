@@ -35,8 +35,6 @@ const MAX_PASS_THRESHOLD: i16 = 100;
 #[derive(Debug, Deserialize)]
 pub struct CreateInterviewRequest {
     pub candidate_name: String,
-    #[serde(default)]
-    pub candidate_email: Option<String>,
     pub role_title: String,
     pub jd_text: String,
     pub resume_text: String,
@@ -94,12 +92,6 @@ pub async fn create(
     let new_session = NewSession {
         account_id: principal.account_id,
         candidate_name: body.candidate_name.trim().to_string(),
-        candidate_email: body
-            .candidate_email
-            .and_then(|e| {
-                let t = e.trim().to_string();
-                if t.is_empty() { None } else { Some(t) }
-            }),
         role_title: body.role_title.trim().to_string(),
         jd_text: body.jd_text,
         resume_text: body.resume_text,
@@ -242,7 +234,20 @@ pub async fn finalize(
     let (technical, behavioral, overall) = compute_scores(&graded);
     let passed = overall >= session.pass_threshold;
 
-    let per_question = build_per_question(&graded);
+    let per_question_entries = build_per_question(&graded);
+    let per_question = serde_json::to_value(&per_question_entries)
+        .map_err(|e| ApiError::Internal(format!("serialize per_question: {e}")))?;
+
+    // Aggregate answer-time metadata for HR. Presentation only — never fed
+    // into scoring. Skipped/missing answers have None and are ignored.
+    let durations_ms: Vec<i32> = graded.iter().filter_map(|q| q.duration_ms).collect();
+    let total_answer_time_ms: i64 = durations_ms.iter().map(|d| *d as i64).sum();
+    let answered_count = durations_ms.len() as i64;
+    let average_answer_time_ms: i64 = if answered_count > 0 {
+        total_answer_time_ms / answered_count
+    } else {
+        0
+    };
 
     // Synthesize narrative sections.
     let graded_json = serde_json::to_string(&per_question)
@@ -279,6 +284,11 @@ pub async fn finalize(
         "summary": summary_raw.summary,
         "summary_model": completion.model,
         "graded_questions": graded.len(),
+        "answered_count": answered_count,
+        "total_answer_time_ms": total_answer_time_ms,
+        "total_answer_time_seconds": total_answer_time_ms / 1000,
+        "average_answer_time_ms": average_answer_time_ms,
+        "average_answer_time_seconds": average_answer_time_ms / 1000,
     });
 
     let stored = repo_session::upsert_report(
@@ -300,20 +310,10 @@ pub async fn finalize(
     )
     .await?;
 
-    // Phase 5: kick the PDF + mailer pipeline through the outbox. The outbox
-    // worker will render the PDF, upload it to S3, and (on success) enqueue
-    // mail.report. Failures retry with backoff.
-    if state.cfg.feature_server_pdf {
-        if let Err(e) = repo_outbox::enqueue(
-            &state.pools.primary,
-            "report.generate_pdf",
-            &json!({ "session_id": id }),
-        )
-        .await
-        {
-            tracing::error!(error=%e, %id, "outbox enqueue (report.generate_pdf) failed");
-        }
-    } else if state.cfg.feature_backend_mailer {
+    // Kick the mailer through the outbox. The mailer renders the PDF in
+    // memory, attaches it to the email, and (if attachment fails) falls back
+    // to a text-only email linking to /report.pdf. Failures retry with backoff.
+    if state.cfg.feature_backend_mailer {
         if let Err(e) = repo_outbox::enqueue(
             &state.pools.primary,
             "mail.report",
@@ -425,23 +425,59 @@ fn compute_scores(graded: &[GradedQuestion]) -> (i16, i16, i16) {
     (technical, behavioral, overall)
 }
 
-fn build_per_question(graded: &[GradedQuestion]) -> JsonValue {
-    let mut out = Vec::with_capacity(graded.len());
-    for q in graded {
-        let section = match q.kind.as_str() {
-            "intro" => "Intro",
-            "technical" => "Technical",
-            "behavioral" => "Behavioral",
-            "followup" => "Follow-up",
-            other => other,
-        };
-        out.push(json!({
-            "q": q.ordinal,
-            "section": section,
-            "question": q.prompt_text,
-            "score": q.grade.as_ref().map(|g| g.score),
-            "feedback": q.grade.as_ref().map(|g| g.reasoning.clone()).unwrap_or_default(),
-        }));
+#[derive(Debug, Serialize)]
+struct PerQuestionEntry {
+    q: i16,
+    section: &'static str,
+    question: String,
+    score: Option<i16>,
+    feedback: String,
+    /// Time the candidate took between question display and submit.
+    /// `None` when no answer row exists (e.g. unanswered tail).
+    duration_ms: Option<i32>,
+    duration_seconds: Option<i64>,
+    time_bucket: Option<&'static str>,
+}
+
+fn build_per_question(graded: &[GradedQuestion]) -> Vec<PerQuestionEntry> {
+    graded
+        .iter()
+        .map(|q| {
+            let section = match q.kind.as_str() {
+                "intro" => "Intro",
+                "technical" => "Technical",
+                "behavioral" => "Behavioral",
+                "followup" => "Follow-up",
+                _ => "Question",
+            };
+            let duration_ms = q.duration_ms;
+            let duration_seconds = duration_ms.map(|d| (d as i64) / 1000);
+            let time_bucket = duration_ms.map(time_bucket);
+            PerQuestionEntry {
+                q: q.ordinal,
+                section,
+                question: q.prompt_text.clone(),
+                score: q.grade.as_ref().map(|g| g.score),
+                feedback: q
+                    .grade
+                    .as_ref()
+                    .map(|g| g.reasoning.clone())
+                    .unwrap_or_default(),
+                duration_ms,
+                duration_seconds,
+                time_bucket,
+            }
+        })
+        .collect()
+}
+
+/// Heuristic bands for how long a candidate took to answer a single question.
+/// Used as report metadata only — never feeds back into grading.
+fn time_bucket(duration_ms: i32) -> &'static str {
+    match duration_ms {
+        i32::MIN..=14_999 => "very_short",
+        15_000..=120_000 => "normal",
+        120_001..=240_000 => "long",
+        _ => "very_long",
     }
-    JsonValue::Array(out)
 }

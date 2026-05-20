@@ -24,6 +24,11 @@ use crate::signing::TranscriptSigner;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(20);
 
+/// Upper bound on a single answer's `duration_ms` before we clamp it. Picked
+/// generously so legitimate slow answers aren't truncated; this only guards
+/// against obviously broken client clocks or stale UI state.
+const MAX_ANSWER_DURATION_MS: i32 = 60 * 60 * 1000;
+
 pub struct ActorDeps {
     pub pool: PgPool,
     pub provider: Arc<dyn AiProvider>,
@@ -278,12 +283,23 @@ impl SessionActor {
             }
         }
 
+        let safe_duration_ms = duration_ms.clamp(0, MAX_ANSWER_DURATION_MS);
+        if safe_duration_ms != duration_ms {
+            tracing::warn!(
+                session_id = %self.session.id,
+                ordinal,
+                submitted = duration_ms,
+                clamped = safe_duration_ms,
+                "answer duration_ms outside [0, MAX_ANSWER_DURATION_MS]; clamped"
+            );
+        }
+
         repo_realtime::insert_answer(
             &self.deps.pool,
             q.id,
             self.session.id,
             &answer,
-            duration_ms.max(0),
+            safe_duration_ms,
         )
         .await?;
 

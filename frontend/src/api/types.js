@@ -46,17 +46,6 @@
  */
 
 /**
- * @typedef {'pending'|'ready'|'failed'} ArtifactStatus
- */
-
-/**
- * @typedef {Object} ReportStatusResponse
- * @property {ArtifactStatus} pdf_status
- * @property {ArtifactStatus} mail_status
- * @property {boolean} ready
- */
-
-/**
  * @typedef {Object} TranscriptChunk
  * @property {number} seq
  * @property {string} ordinal_or_section

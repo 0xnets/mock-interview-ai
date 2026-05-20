@@ -1,10 +1,11 @@
-//! Phase 5: signed-URL redirect for the server-rendered PDF report.
-//! Phase 6: log a `report.pdf_downloaded` audit row on every redirect.
+//! On-demand PDF report renderer. Loads the stored report, renders a PDF in
+//! memory, and streams it back. Also serves as the fallback link target in
+//! emails when the attached-PDF path can't be used.
 
 use axum::{
     extract::{Path, State},
     http::{header, StatusCode},
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Response},
 };
 use persistence::{repo_audit, repo_reports};
 use serde_json::json;
@@ -14,6 +15,7 @@ use crate::{
     app::AppState,
     auth::Principal,
     error::{ApiError, ApiResult},
+    pdf::render_report_pdf,
 };
 
 pub async fn get_report_pdf(
@@ -21,21 +23,12 @@ pub async fn get_report_pdf(
     Path(id): Path<Uuid>,
     principal: Option<axum::Extension<Principal>>,
 ) -> ApiResult<Response> {
-    if !state.cfg.feature_server_pdf {
-        return Err(ApiError::NotFound);
-    }
-    let Some(store) = state.blob_store.as_ref() else {
-        return Err(ApiError::Internal(
-            "blob store not configured; set S3_BUCKET".into(),
-        ));
-    };
-    let key = repo_reports::fetch_pdf_object_key(&state.pools.read, id)
-        .await?
-        .ok_or(ApiError::NotFound)?;
-    let url = store
-        .presign_get(&key)
-        .await
-        .map_err(|e| ApiError::Internal(format!("presign_get failed: {e}")))?;
+    let report = repo_reports::fetch_for_render(&state.pools.read, id).await?;
+
+    let pdf_bytes = render_report_pdf(&report)
+        .map_err(|e| ApiError::Internal(format!("render_report_pdf failed: {e}")))?;
+
+    let filename = pdf_filename(&report.candidate_name);
 
     let actor_id = principal.as_ref().map(|p| p.account_id);
     let event_id = principal.as_ref().map(|p| p.event_id);
@@ -49,23 +42,26 @@ pub async fn get_report_pdf(
     )
     .await;
 
-    Ok(Redirect::to(&url).into_response())
-}
-
-pub async fn get_report_status(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> ApiResult<Response> {
-    let report = repo_reports::fetch_for_render(&state.pools.read, id).await?;
-    let body = json!({
-        "pdf_status": report.pdf_status,
-        "mail_status": report.mail_status,
-        "ready": report.pdf_object_key.is_some() && report.pdf_status == "rendered",
-    });
     Ok((
         StatusCode::OK,
-        [(header::CONTENT_TYPE, "application/json")],
-        body.to_string(),
+        [
+            (header::CONTENT_TYPE, "application/pdf".to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("inline; filename=\"{filename}\""),
+            ),
+        ],
+        pdf_bytes,
     )
         .into_response())
+}
+
+fn pdf_filename(candidate_name: &str) -> String {
+    let safe: String = candidate_name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    let safe = safe.trim_matches('_');
+    let safe = if safe.is_empty() { "candidate" } else { safe };
+    format!("interview-report-{safe}.pdf")
 }

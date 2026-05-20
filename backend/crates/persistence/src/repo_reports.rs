@@ -1,4 +1,4 @@
-//! Phase 5: helpers for the PDF + mailer pipeline that runs off the outbox.
+//! Helpers for the mailer pipeline that runs off the outbox.
 
 use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
@@ -24,8 +24,6 @@ pub struct ReportForRender {
     pub action_items: JsonValue,
     pub raw_ai_output: JsonValue,
     pub generated_at: DateTime<Utc>,
-    pub pdf_object_key: Option<String>,
-    pub pdf_status: String,
     pub mail_status: String,
 }
 
@@ -38,7 +36,7 @@ pub async fn fetch_for_render(
         SELECT s.id, s.candidate_name, s.role_title, s.hr_email, s.pass_threshold,
                r.overall, r.technical, r.behavioral, r.passed, r.summary,
                r.strengths, r.weaknesses, r.action_items, r.raw_ai_output,
-               r.generated_at, r.pdf_object_key, r.pdf_status, r.mail_status
+               r.generated_at, r.mail_status
         FROM reports r
         JOIN interview_sessions s ON s.id = r.session_id
         WHERE r.session_id = $1
@@ -64,52 +62,8 @@ pub async fn fetch_for_render(
         action_items: row.try_get("action_items")?,
         raw_ai_output: row.try_get("raw_ai_output")?,
         generated_at: row.try_get::<DateTime<Utc>, _>("generated_at")?,
-        pdf_object_key: row.try_get("pdf_object_key")?,
-        pdf_status: row.try_get("pdf_status")?,
         mail_status: row.try_get("mail_status")?,
     })
-}
-
-pub async fn mark_pdf_rendered(
-    pool: &PgPool,
-    session_id: Uuid,
-    object_key: &str,
-) -> Result<(), DbError> {
-    sqlx::query(
-        r#"
-        UPDATE reports
-        SET pdf_object_key = $2,
-            pdf_status = 'rendered',
-            pdf_generated_at = now(),
-            pdf_error = NULL
-        WHERE session_id = $1
-        "#,
-    )
-    .bind(session_id)
-    .bind(object_key)
-    .execute(pool)
-    .await?;
-    Ok(())
-}
-
-pub async fn mark_pdf_failed(
-    pool: &PgPool,
-    session_id: Uuid,
-    err: &str,
-) -> Result<(), DbError> {
-    sqlx::query(
-        r#"
-        UPDATE reports
-        SET pdf_status = 'failed',
-            pdf_error = $2
-        WHERE session_id = $1
-        "#,
-    )
-    .bind(session_id)
-    .bind(err)
-    .execute(pool)
-    .await?;
-    Ok(())
 }
 
 pub async fn mark_mail_sent(pool: &PgPool, session_id: Uuid) -> Result<(), DbError> {
@@ -146,21 +100,4 @@ pub async fn mark_mail_failed(
     .execute(pool)
     .await?;
     Ok(())
-}
-
-pub async fn fetch_pdf_object_key(
-    pool: &PgPool,
-    session_id: Uuid,
-) -> Result<Option<String>, DbError> {
-    let row: Option<(Option<String>, String)> = sqlx::query_as(
-        r#"
-        SELECT pdf_object_key, pdf_status
-        FROM reports
-        WHERE session_id = $1
-        "#,
-    )
-    .bind(session_id)
-    .fetch_optional(pool)
-    .await?;
-    Ok(row.and_then(|(k, status)| if status == "rendered" { k } else { None }))
 }

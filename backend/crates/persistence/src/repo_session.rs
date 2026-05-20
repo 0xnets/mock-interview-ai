@@ -18,7 +18,6 @@ pub struct BehavioralPick {
 pub struct NewSession {
     pub account_id: Uuid,
     pub candidate_name: String,
-    pub candidate_email: Option<String>,
     pub role_title: String,
     pub jd_text: String,
     pub resume_text: String,
@@ -72,13 +71,13 @@ pub async fn create_session(pool: &PgPool, req: NewSession) -> Result<CreatedSes
         let inserted: Option<(Uuid,)> = sqlx::query_as(
             r#"
             INSERT INTO interview_sessions (
-                id, account_id, candidate_name, candidate_email, role_title,
+                id, account_id, candidate_name, role_title,
                 jd_text, resume_text, state, shortcode, expires_at,
                 pass_threshold, hr_email, config_snapshot
             ) VALUES (
-                $1, $2, $3, $4, $5,
-                $6, $7, $8, $9, $10,
-                $11, $12, $13
+                $1, $2, $3, $4,
+                $5, $6, $7, $8, $9,
+                $10, $11, $12
             )
             ON CONFLICT (shortcode) DO NOTHING
             RETURNING id
@@ -87,7 +86,6 @@ pub async fn create_session(pool: &PgPool, req: NewSession) -> Result<CreatedSes
         .bind(session_id)
         .bind(req.account_id)
         .bind(&req.candidate_name)
-        .bind(req.candidate_email.as_deref())
         .bind(&req.role_title)
         .bind(&req.jd_text)
         .bind(&req.resume_text)
@@ -346,6 +344,91 @@ pub async fn find_by_shortcode(pool: &PgPool, code: &str) -> Result<SessionByCod
         expires_at: row.4,
         shortcode: row.5,
     })
+}
+
+/// Atomically claim a shortlink on the first candidate join. The link is
+/// one-use: the first caller flips `consumed_at` and receives the session;
+/// every later caller gets `Conflict`. `SELECT ... FOR UPDATE` serializes
+/// concurrent callers, so two clients can never both consume the same code.
+///
+/// Returns `NotFound` when the code is missing or the session has expired (an
+/// expired link is left un-consumed). Returns `Conflict` when the link was
+/// already consumed or the session is no longer in a joinable state — in both
+/// cases the link is left untouched.
+pub async fn consume_shortlink(pool: &PgPool, code: &str) -> Result<SessionByCode, DbError> {
+    let mut tx: Transaction<'_, Postgres> = pool.begin().await?;
+
+    let row: Option<(Uuid, String, String, String, DateTime<Utc>, String, Option<DateTime<Utc>>)> =
+        sqlx::query_as(
+            r#"
+            SELECT s.id, s.state, s.candidate_name, s.role_title, s.expires_at,
+                   s.shortcode, l.consumed_at
+            FROM shortlinks l
+            JOIN interview_sessions s ON s.id = l.session_id
+            WHERE l.code = $1
+            FOR UPDATE OF l
+            "#,
+        )
+        .bind(code)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+    let row = match row {
+        Some(r) => r,
+        None => {
+            tx.rollback().await?;
+            return Err(DbError::NotFound);
+        }
+    };
+
+    let session = SessionByCode {
+        id: row.0,
+        state: row.1,
+        candidate_name: row.2,
+        role_title: row.3,
+        expires_at: row.4,
+        shortcode: row.5,
+    };
+    let consumed_at = row.6;
+
+    if session.expires_at < Utc::now() {
+        tx.rollback().await?;
+        return Err(DbError::NotFound);
+    }
+    if consumed_at.is_some() {
+        tx.rollback().await?;
+        return Err(DbError::Conflict);
+    }
+    match session.state.as_str() {
+        "pending" | "primed" | "active" | "paused" => {}
+        _ => {
+            tx.rollback().await?;
+            return Err(DbError::Conflict);
+        }
+    }
+
+    sqlx::query(
+        r#"
+        UPDATE shortlinks SET consumed_at = now() WHERE code = $1
+        "#,
+    )
+    .bind(code)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO audit_log (session_id, action, metadata)
+        VALUES ($1, 'shortlink.consumed', $2)
+        "#,
+    )
+    .bind(session.id)
+    .bind(serde_json::json!({ "code": code }))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(session)
 }
 
 #[derive(Debug, Clone, Serialize)]
