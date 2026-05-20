@@ -54,7 +54,6 @@ pub struct Settings {
     pub feature_rate_limit: bool,
     pub rate_limit_create_interview_per_hour: u32,
     pub rate_limit_login_per_min_ip: u32,
-    pub rate_limit_login_per_hour_email: u32,
     pub rate_limit_session_by_code_per_min: u32,
     pub rate_limit_ws_per_min: u32,
 
@@ -68,8 +67,4 @@ pub struct Settings {
     pub feature_otel: bool,
     pub otlp_endpoint: Option<String>,
     pub otel_service_name: String,
-
-    // Phase 6 KMS
-    pub kms_provider: String, // "env" | "aws" | "gcp" | "vault"
-    pub kms_key_arn: Option<String>,
 }

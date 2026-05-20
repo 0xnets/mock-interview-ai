@@ -26,31 +26,6 @@ pub const STREAM_PRIMING: &str = "mi:priming";
 pub const STREAM_REALTIME: &str = "mi:realtime-fanout";
 const GROUP: &str = "api";
 
-/// Producer side: copy newly-claimed DB outbox rows onto the Redis stream so
-/// any consumer can pick them up. The DB row's lease guarantees a single
-/// consumer per outbox id regardless of how many pods relay.
-pub async fn relay_outbox_row(
-    backplane: &RedisBackplane,
-    id: i64,
-    topic: &str,
-    payload: &serde_json::Value,
-) -> Result<()> {
-    let mut conn = backplane.mgr.clone();
-    let payload = payload.to_string();
-    let _: String = conn
-        .xadd(
-            STREAM_OUTBOX,
-            "*",
-            &[
-                ("id", id.to_string().as_str()),
-                ("topic", topic),
-                ("payload", payload.as_str()),
-            ],
-        )
-        .await?;
-    Ok(())
-}
-
 pub async fn ensure_groups(backplane: &RedisBackplane) -> Result<()> {
     let streams = [STREAM_OUTBOX, STREAM_PRIMING, STREAM_REALTIME];
     let mut conn = backplane.mgr.clone();
@@ -168,27 +143,6 @@ async fn handle_via_db(
     // skip without touching anything else.
     let _: Vec<repo_outbox::OutboxRow> =
         repo_outbox::claim_batch(pool, 1, ChronoDuration::seconds(60)).await?;
-    Ok(())
-}
-
-/// Realtime fanout publish — used by admin-abort etc. so a state transition
-/// reaches whichever pod owns the WS for that session.
-pub async fn publish_realtime_event(
-    backplane: &RedisBackplane,
-    session_id: &str,
-    payload: &serde_json::Value,
-) -> Result<()> {
-    let mut conn = backplane.mgr.clone();
-    let _: String = conn
-        .xadd(
-            STREAM_REALTIME,
-            "*",
-            &[
-                ("session_id", session_id),
-                ("payload", payload.to_string().as_str()),
-            ],
-        )
-        .await?;
     Ok(())
 }
 

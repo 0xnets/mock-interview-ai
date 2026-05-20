@@ -49,7 +49,6 @@ pub const COOKIES_SECURE: bool = false;
 pub const FEATURE_RATE_LIMIT: bool = false;
 pub const RATE_LIMIT_CREATE_INTERVIEW_PER_HOUR: u32 = 60;
 pub const RATE_LIMIT_LOGIN_PER_MIN_IP: u32 = 10;
-pub const RATE_LIMIT_LOGIN_PER_HOUR_EMAIL: u32 = 30;
 pub const RATE_LIMIT_SESSION_BY_CODE_PER_MIN: u32 = 60;
 pub const RATE_LIMIT_WS_PER_MIN: u32 = 10;
 
@@ -61,6 +60,3 @@ pub const FEATURE_REDIS_WS_LOCKS: bool = false;
 // ─── Phase 6 — observability ───────────────────────────────────────────────
 pub const FEATURE_OTEL: bool = false;
 pub const OTEL_SERVICE_NAME: &str = "mock-interview-api";
-
-// ─── Phase 6 — KMS ─────────────────────────────────────────────────────────
-pub const KMS_PROVIDER: &str = "env";

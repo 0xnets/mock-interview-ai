@@ -3,8 +3,6 @@
 //! literal so the chain still verifies across restarts; prod must set
 //! `TRANSCRIPT_SIGNING_SECRET_HEX` (32 bytes hex). `TRANSCRIPT_KEY_ID` lets
 //! us rotate without breaking already-signed checkpoints.
-//!
-//! Phase 6 will replace the env-loaded key with a KMS-backed signer.
 
 use anyhow::{anyhow, Context, Result};
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey, SECRET_KEY_LENGTH};

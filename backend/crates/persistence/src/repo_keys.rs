@@ -49,15 +49,17 @@ pub async fn retire(pool: &PgPool, key_id: &str) -> Result<(), DbError> {
     Ok(())
 }
 
+type KeyVersionRow = (
+    String,
+    Vec<u8>,
+    String,
+    DateTime<Utc>,
+    Option<DateTime<Utc>>,
+    Option<String>,
+);
+
 pub async fn list_all(pool: &PgPool) -> Result<Vec<KeyVersion>, DbError> {
-    let rows: Vec<(
-        String,
-        Vec<u8>,
-        String,
-        DateTime<Utc>,
-        Option<DateTime<Utc>>,
-        Option<String>,
-    )> = sqlx::query_as(
+    let rows: Vec<KeyVersionRow> = sqlx::query_as(
         r#"
             SELECT key_id, public_key, status, created_at, retired_at, notes
             FROM key_versions

@@ -186,6 +186,7 @@ pub async fn fetch_pending_for_priming(
 /// Insert primed questions and flip state to `primed` atomically. The state
 /// guard `WHERE state = 'pending'` makes it safe to call twice — only the
 /// first caller wins.
+#[allow(clippy::too_many_arguments)]
 pub async fn complete_priming(
     pool: &PgPool,
     session_id: Uuid,
@@ -351,18 +352,20 @@ pub async fn find_by_shortcode(pool: &PgPool, code: &str) -> Result<SessionByCod
 /// expired link is left un-consumed). Returns `Conflict` when the link was
 /// already consumed or the session is no longer in a joinable state — in both
 /// cases the link is left untouched.
+type SessionByCodeRow = (
+    Uuid,
+    String,
+    String,
+    String,
+    DateTime<Utc>,
+    String,
+    Option<DateTime<Utc>>,
+);
+
 pub async fn consume_shortlink(pool: &PgPool, code: &str) -> Result<SessionByCode, DbError> {
     let mut tx: Transaction<'_, Postgres> = pool.begin().await?;
 
-    let row: Option<(
-        Uuid,
-        String,
-        String,
-        String,
-        DateTime<Utc>,
-        String,
-        Option<DateTime<Utc>>,
-    )> = sqlx::query_as(
+    let row: Option<SessionByCodeRow> = sqlx::query_as(
         r#"
             SELECT s.id, s.state, s.candidate_name, s.role_title, s.expires_at,
                    s.shortcode, l.consumed_at
@@ -445,19 +448,20 @@ pub struct CandidatePayload {
     pub expires_at: DateTime<Utc>,
 }
 
+type CandidatePayloadRow = (Uuid, String, String, String, DateTime<Utc>, Option<String>);
+
 pub async fn candidate_payload(pool: &PgPool, code: &str) -> Result<CandidatePayload, DbError> {
-    let row: Option<(Uuid, String, String, String, DateTime<Utc>, Option<String>)> =
-        sqlx::query_as(
-            r#"
+    let row: Option<CandidatePayloadRow> = sqlx::query_as(
+        r#"
         SELECT s.id, s.state, s.candidate_name, s.role_title, s.expires_at, s.scoring_context
         FROM interview_sessions s
         JOIN shortlinks l ON l.session_id = s.id
         WHERE l.code = $1
         "#,
-        )
-        .bind(code)
-        .fetch_optional(pool)
-        .await?;
+    )
+    .bind(code)
+    .fetch_optional(pool)
+    .await?;
     let row = row.ok_or(DbError::NotFound)?;
     let (session_id, state, name, role, expires_at, scoring_context) = row;
 
@@ -508,18 +512,20 @@ pub struct SessionForScoring {
     pub hr_email: String,
 }
 
+type SessionForScoringRow = (
+    Uuid,
+    String,
+    String,
+    String,
+    String,
+    String,
+    i16,
+    Option<String>,
+    String,
+);
+
 pub async fn find_for_scoring(pool: &PgPool, id: Uuid) -> Result<SessionForScoring, DbError> {
-    let row: Option<(
-        Uuid,
-        String,
-        String,
-        String,
-        String,
-        String,
-        i16,
-        Option<String>,
-        String,
-    )> = sqlx::query_as(
+    let row: Option<SessionForScoringRow> = sqlx::query_as(
         r#"
             SELECT id, state, candidate_name, role_title, jd_text, resume_text,
                    pass_threshold, scoring_context, hr_email

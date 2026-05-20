@@ -43,6 +43,7 @@ pub enum ServerMsg {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "t", rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum ClientMsg {
     /// Optional handshake. Currently informational.
     Hello {

@@ -14,6 +14,7 @@ use uuid::Uuid;
 const FALLBACK: &str = "Can you walk me through the trade-offs of that approach in more detail?";
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct FollowupRaw {
     #[serde(default)]
     question: String,

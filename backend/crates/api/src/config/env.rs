@@ -89,10 +89,6 @@ impl Settings {
             "RATE_LIMIT_LOGIN_PER_MIN_IP",
             defaults::RATE_LIMIT_LOGIN_PER_MIN_IP,
         )?;
-        let rate_limit_login_per_hour_email = env_u32(
-            "RATE_LIMIT_LOGIN_PER_HOUR_EMAIL",
-            defaults::RATE_LIMIT_LOGIN_PER_HOUR_EMAIL,
-        )?;
         let rate_limit_session_by_code_per_min = env_u32(
             "RATE_LIMIT_SESSION_BY_CODE_PER_MIN",
             defaults::RATE_LIMIT_SESSION_BY_CODE_PER_MIN,
@@ -110,10 +106,6 @@ impl Settings {
         let otlp_endpoint = env::var("OTLP_ENDPOINT").ok().filter(|s| !s.is_empty());
         let otel_service_name =
             env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| defaults::OTEL_SERVICE_NAME.into());
-
-        let kms_provider =
-            env::var("KMS_PROVIDER").unwrap_or_else(|_| defaults::KMS_PROVIDER.into());
-        let kms_key_arn = env::var("KMS_KEY_ARN").ok().filter(|s| !s.is_empty());
 
         let settings = Self {
             database_url,
@@ -149,7 +141,6 @@ impl Settings {
             feature_rate_limit,
             rate_limit_create_interview_per_hour,
             rate_limit_login_per_min_ip,
-            rate_limit_login_per_hour_email,
             rate_limit_session_by_code_per_min,
             rate_limit_ws_per_min,
             redis_url,
@@ -159,8 +150,6 @@ impl Settings {
             feature_otel,
             otlp_endpoint,
             otel_service_name,
-            kms_provider,
-            kms_key_arn,
         };
         validation::validate(&settings)?;
         Ok(settings)

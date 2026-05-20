@@ -81,8 +81,6 @@ async fn main() -> anyhow::Result<()> {
     let env_signer = Arc::new(
         infrastructure::signing::TranscriptSigner::from_env().context("init transcript signer")?,
     );
-    let kms_signer = infrastructure::kms::build_signer(&cfg, env_signer.clone())
-        .context("init KMS-backed checkpoint signer")?;
     if let Err(e) = persistence::repo_keys::upsert_active(
         &pools.primary,
         env_signer.key_id(),
@@ -138,7 +136,6 @@ async fn main() -> anyhow::Result<()> {
         prime_notify,
         nonces,
         signer: env_signer,
-        kms_signer,
         redis,
         jwt,
         rate_limit_mem,

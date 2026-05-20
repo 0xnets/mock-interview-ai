@@ -31,22 +31,24 @@ pub struct SessionForActor {
     pub expires_at: DateTime<Utc>,
 }
 
+type SessionForActorRow = (
+    Uuid,
+    Uuid,
+    String,
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    i16,
+    DateTime<Utc>,
+);
+
 pub async fn find_session_for_actor(
     pool: &PgPool,
     session_id: Uuid,
 ) -> Result<SessionForActor, DbError> {
-    let row: Option<(
-        Uuid,
-        Uuid,
-        String,
-        String,
-        String,
-        String,
-        String,
-        Option<String>,
-        i16,
-        DateTime<Utc>,
-    )> = sqlx::query_as(
+    let row: Option<SessionForActorRow> = sqlx::query_as(
         r#"
         SELECT id, account_id, state, candidate_name, role_title, jd_text, resume_text,
                scoring_context, pass_threshold, expires_at
@@ -72,8 +74,10 @@ pub async fn find_session_for_actor(
     })
 }
 
+type QuestionQueryRow = (Uuid, i16, String, Option<Uuid>, Option<String>, String);
+
 pub async fn list_questions(pool: &PgPool, session_id: Uuid) -> Result<Vec<QuestionRow>, DbError> {
-    let rows: Vec<(Uuid, i16, String, Option<Uuid>, Option<String>, String)> = sqlx::query_as(
+    let rows: Vec<QuestionQueryRow> = sqlx::query_as(
         r#"
         SELECT id, ordinal, kind, parent_question_id, topic, prompt_text
         FROM questions
@@ -340,22 +344,24 @@ pub struct GradeRow {
 /// Load every question for a session along with its answer and (if present) its
 /// grade. Used by the finalize endpoint to roll a final report up from
 /// per-question grades produced during the interview.
+type GradedQuestionRow = (
+    Uuid,
+    i16,
+    String,
+    String,
+    Option<String>,
+    Option<i32>,
+    Option<i16>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 pub async fn load_graded_session(
     pool: &PgPool,
     session_id: Uuid,
 ) -> Result<Vec<GradedQuestion>, DbError> {
-    let rows: Vec<(
-        Uuid,
-        i16,
-        String,
-        String,
-        Option<String>,
-        Option<i32>,
-        Option<i16>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-    )> = sqlx::query_as(
+    let rows: Vec<GradedQuestionRow> = sqlx::query_as(
         r#"
         SELECT q.id, q.ordinal, q.kind, q.prompt_text,
                a.transcript_text, a.duration_ms,

@@ -150,28 +150,6 @@ pub fn inc_rate_limited(route: &str) {
     RATE_LIMITED_TOTAL.with_label_values(&[route]).inc();
 }
 
-pub fn observe_ai_call(
-    model: &str,
-    kind: &str,
-    status: &str,
-    input_tokens: u64,
-    output_tokens: u64,
-    latency_ms: f64,
-) {
-    AI_REQUESTS_TOTAL
-        .with_label_values(&[model, kind, status])
-        .inc();
-    AI_INPUT_TOKENS_TOTAL
-        .with_label_values(&[model, kind])
-        .inc_by(input_tokens as f64);
-    AI_OUTPUT_TOKENS_TOTAL
-        .with_label_values(&[model, kind])
-        .inc_by(output_tokens as f64);
-    AI_LATENCY_MS
-        .with_label_values(&[model, kind])
-        .observe(latency_ms);
-}
-
 /// Lazily forces registration so the /metrics endpoint reports every series
 /// at zero from the first scrape (Prometheus best-practice).
 pub fn init() {

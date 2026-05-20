@@ -4,7 +4,6 @@
 //! environment — key management, Redis, signing, streams, observability,
 //! metrics, and PDF rendering — as opposed to request handling or domain logic.
 
-pub mod kms;
 pub mod metrics;
 pub mod observability;
 pub mod pdf;

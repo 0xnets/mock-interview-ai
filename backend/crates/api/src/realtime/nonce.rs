@@ -22,6 +22,7 @@ pub struct NonceInfo {
     pub created_at: Instant,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum NonceStore {
     InMemory(Mutex<HashMap<String, NonceInfo>>),
     Redis(redis::aio::ConnectionManager),

@@ -6,7 +6,6 @@
 //! family — this is the standard mitigation for stolen refresh tokens.
 
 use std::collections::HashSet;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Context, Result};
 use argon2::password_hash::{
@@ -87,14 +86,16 @@ impl JwtKeys {
             kid: self.kid.clone(),
             sid: session_id.to_string(),
         };
-        let mut header = Header::default();
-        header.kid = Some(self.kid.clone());
+        let header = Header {
+            kid: Some(self.kid.clone()),
+            ..Default::default()
+        };
         Ok(encode(&header, &claims, &self.enc)?)
     }
 
     pub fn verify_access(&self, token: &str) -> Result<AccessClaims> {
         let mut v = Validation::default();
-        v.set_issuer(&[self.issuer.clone()]);
+        v.set_issuer(std::slice::from_ref(&self.issuer));
         // Allow a couple seconds of clock skew; default leeway is 60s.
         let data = decode::<AccessClaims>(token, &self.dec, &v)?;
         Ok(data.claims)
@@ -265,13 +266,6 @@ pub fn mint_refresh_token() -> String {
         hex::encode(r1.to_be_bytes()),
         hex::encode(r2.to_be_bytes())
     )
-}
-
-pub fn now_unix() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or_default()
 }
 
 #[allow(dead_code)]

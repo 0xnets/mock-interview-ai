@@ -98,7 +98,7 @@ fn run() -> Result<()> {
         let canonical =
             canonical_row_bytes(c.seq, c.question_id, c.is_final, c.client_ts_ms, &c.text);
         let mut h = Sha256::new();
-        h.update(&prev);
+        h.update(prev);
         h.update(&canonical);
         let computed = h.finalize();
         let row_actual = hex::decode(&c.row_hash_hex).context("decode row_hash_hex")?;

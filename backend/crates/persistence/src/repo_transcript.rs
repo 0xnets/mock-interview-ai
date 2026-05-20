@@ -153,19 +153,21 @@ pub struct ChunkRow {
     pub row_hash: Vec<u8>,
 }
 
+type ChunkQueryRow = (
+    i64,
+    Uuid,
+    Uuid,
+    i32,
+    String,
+    bool,
+    i64,
+    chrono::DateTime<chrono::Utc>,
+    Vec<u8>,
+    Vec<u8>,
+);
+
 pub async fn list_chunks(pool: &PgPool, session_id: Uuid) -> Result<Vec<ChunkRow>, DbError> {
-    let rows: Vec<(
-        i64,
-        Uuid,
-        Uuid,
-        i32,
-        String,
-        bool,
-        i64,
-        chrono::DateTime<chrono::Utc>,
-        Vec<u8>,
-        Vec<u8>,
-    )> = sqlx::query_as(
+    let rows: Vec<ChunkQueryRow> = sqlx::query_as(
         r#"
         SELECT id, session_id, question_id, seq, text, is_final,
                client_ts_ms, server_ts, prev_hash, row_hash
@@ -220,6 +222,7 @@ pub struct CheckpointRow {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_checkpoint(
     pool: &PgPool,
     session_id: Uuid,
@@ -250,21 +253,23 @@ pub async fn insert_checkpoint(
     Ok(())
 }
 
+type CheckpointQueryRow = (
+    i64,
+    Uuid,
+    i32,
+    i64,
+    Vec<u8>,
+    Vec<u8>,
+    String,
+    i32,
+    chrono::DateTime<chrono::Utc>,
+);
+
 pub async fn list_checkpoints(
     pool: &PgPool,
     session_id: Uuid,
 ) -> Result<Vec<CheckpointRow>, DbError> {
-    let rows: Vec<(
-        i64,
-        Uuid,
-        i32,
-        i64,
-        Vec<u8>,
-        Vec<u8>,
-        String,
-        i32,
-        chrono::DateTime<chrono::Utc>,
-    )> = sqlx::query_as(
+    let rows: Vec<CheckpointQueryRow> = sqlx::query_as(
         r#"
         SELECT id, session_id, last_seq, last_row_id, row_hash, signature,
                key_id, chunk_count, created_at

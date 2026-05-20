@@ -16,6 +16,7 @@ use crate::models::auth::LoginResponse;
 
 pub(crate) const REFRESH_COOKIE: &str = "mi_rt";
 
+#[allow(clippy::too_many_arguments)]
 pub async fn issue_tokens(
     state: &AppState,
     account_id: &Uuid,

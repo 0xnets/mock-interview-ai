@@ -24,17 +24,19 @@ pub struct Account {
     pub last_login_at: Option<DateTime<Utc>>,
 }
 
+type AccountRow = (
+    Uuid,
+    String,
+    Option<String>,
+    Option<String>,
+    String,
+    String,
+    Option<Uuid>,
+    Option<DateTime<Utc>>,
+);
+
 pub async fn find_account_by_email(pool: &PgPool, email: &str) -> Result<Account, DbError> {
-    let row: Option<(
-        Uuid,
-        String,
-        Option<String>,
-        Option<String>,
-        String,
-        String,
-        Option<Uuid>,
-        Option<DateTime<Utc>>,
-    )> = sqlx::query_as(
+    let row: Option<AccountRow> = sqlx::query_as(
         r#"
             SELECT id, email::text, password_hash, display_name, role, status, org_id, last_login_at
             FROM accounts
@@ -58,16 +60,7 @@ pub async fn find_account_by_email(pool: &PgPool, email: &str) -> Result<Account
 }
 
 pub async fn find_account_by_id(pool: &PgPool, id: Uuid) -> Result<Account, DbError> {
-    let row: Option<(
-        Uuid,
-        String,
-        Option<String>,
-        Option<String>,
-        String,
-        String,
-        Option<Uuid>,
-        Option<DateTime<Utc>>,
-    )> = sqlx::query_as(
+    let row: Option<AccountRow> = sqlx::query_as(
         r#"
             SELECT id, email::text, password_hash, display_name, role, status, org_id, last_login_at
             FROM accounts
