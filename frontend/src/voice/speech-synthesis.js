@@ -1,4 +1,3 @@
-import { state } from '../app/state.js';
 import { ENV, envNumber } from '../app/env.js';
 import { ensureVoicesLoaded, getSelectedVoice } from './voice-selection.js';
 
@@ -27,9 +26,4 @@ export async function speak(text) {
     utter.onerror = resolve;
     speechSynthesis.speak(utter);
   });
-}
-
-export function speakCurrentQuestion() {
-  const text = state.session.currentQuestionText;
-  if (text) speak(text);
 }

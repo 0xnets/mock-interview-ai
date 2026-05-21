@@ -85,7 +85,17 @@ async function apiFetch(path, { method = 'GET', body, headers = {}, auth = 'opti
     const token = getAccessToken();
     if (token) init.headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(url, init);
+  let res;
+  try {
+    res = await fetch(url, init);
+  } catch (e) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'this frontend origin';
+    throw new ApiError(
+      0,
+      `Could not reach API at ${baseUrl()}. Check that the backend is running and CORS_ORIGINS allows ${origin}.`,
+      { cause: e?.message || String(e) },
+    );
+  }
   if (res.status === 401 && auth === 'required' && !_retried) {
     try {
       await refresh();

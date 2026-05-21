@@ -19,7 +19,7 @@ function walk(dir, predicate, files = []) {
   return files;
 }
 
-for (const filePath of walk(srcDir, file => file.endsWith('.js'))) {
+for (const filePath of walk(srcDir, file => file.endsWith('.js') || file.endsWith('.jsx'))) {
   const source = fs.readFileSync(filePath, 'utf8');
   for (const match of source.matchAll(/from ['"]([^'"]+)['"]/g)) {
     const specifier = match[1];

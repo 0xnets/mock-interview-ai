@@ -1,3 +1,11 @@
+function defaultApiBaseUrl() {
+  if (typeof window === 'undefined' || !window.location?.hostname) {
+    return 'http://localhost:8080';
+  }
+  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+  return `${protocol}//${window.location.hostname}:8080`;
+}
+
 const DEFAULT_ENV = {
   LOCAL_STORAGE_CONFIG_KEY: 'mockInterviewConfig',
   DEFAULT_TECH_QUESTION_COUNT: '5',
@@ -20,7 +28,7 @@ const DEFAULT_ENV = {
   RESULT_WARNING_SCORE_THRESHOLD: '70',
   WHATSAPP_SHARE_URL: 'https://wa.me/?text=',
   EMAIL_SHARE_SCHEME: 'mailto:',
-  APP_API_BASE_URL: 'http://localhost:8080'
+  APP_API_BASE_URL: defaultApiBaseUrl()
 };
 
 export const ENV = {
