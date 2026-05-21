@@ -3,24 +3,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
+/// Candidate/session input for a new interview. The HR config (recipient
+/// email, question counts, behavioral bank, pass threshold) is loaded
+/// server-side from the current account, not sent by the client.
 #[derive(Debug, Deserialize)]
 pub struct CreateInterviewRequest {
     pub candidate_name: String,
     pub role_title: String,
     pub jd_text: String,
     pub resume_text: String,
-    pub hr_email: String,
     #[serde(default = "default_include_intro")]
     pub include_intro: bool,
-    #[serde(default)]
-    pub tech_count: Option<u16>,
-    #[serde(default)]
-    pub behavioral_count: Option<u16>,
-    #[serde(default)]
-    pub pass_threshold: Option<i16>,
-    /// `{ "topic": ["q1", "q2"] }` (or a list of `{topic, questions}` objects).
-    /// The priming worker picks one random question per topic.
-    pub behavioral_bank: JsonValue,
 }
 
 fn default_include_intro() -> bool {

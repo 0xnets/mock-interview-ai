@@ -7,7 +7,6 @@ function defaultApiBaseUrl() {
 }
 
 const DEFAULT_ENV = {
-  LOCAL_STORAGE_CONFIG_KEY: 'mockInterviewConfig',
   DEFAULT_TECH_QUESTION_COUNT: '5',
   DEFAULT_NON_TECH_QUESTION_COUNT: '5',
   DEFAULT_PASS_THRESHOLD: '90',

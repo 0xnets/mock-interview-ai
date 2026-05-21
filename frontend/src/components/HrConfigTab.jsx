@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppState } from '../providers/AppStateProvider.jsx';
 import { useVoices } from '../hooks/useVoices.js';
 import { testVoice } from '../voice/speech-synthesis.js';
@@ -18,13 +18,14 @@ import {
 const DEFAULT_NON_TECH_SECTION = 'Role Fit & Work Preferences';
 
 export function HrConfigTab() {
-  const { config, hasSavedConfig, saveConfig } = useAppState();
+  const { config, configStatus, hasSavedConfig, saveConfig } = useAppState();
   const voiceGroups = useVoices();
   const emailRef = useRef(null);
   const questionsRef = useRef(null);
   const renameRef = useRef(null);
 
-  const [editorVisible, setEditorVisible] = useState(!hasSavedConfig);
+  const [editorVisible, setEditorVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => ({
     hrEmail: config.hrEmail || '',
     techCount: config.techCount,
@@ -60,7 +61,7 @@ export function HrConfigTab() {
     setForm(prev => ({ ...prev, [key]: value }));
   }
 
-  function loadFromConfig() {
+  const loadFromConfig = useCallback(() => {
     setForm({
       hrEmail: config.hrEmail || '',
       techCount: config.techCount,
@@ -73,9 +74,19 @@ export function HrConfigTab() {
     setSectionRename('');
     setRenamingSection('');
     setSectionInput(DEFAULT_NON_TECH_SECTION);
-  }
+  }, [config]);
 
-  function handleSave() {
+  // While the editor is closed, keep the draft synced to the backend-loaded
+  // config; open the editor automatically for first-time setup.
+  useEffect(() => {
+    if (editorVisible) return;
+    loadFromConfig();
+    if ((configStatus === 'ready' || configStatus === 'error') && !hasSavedConfig) {
+      setEditorVisible(true);
+    }
+  }, [loadFromConfig, configStatus, hasSavedConfig, editorVisible]);
+
+  async function handleSave() {
     const hrEmail = form.hrEmail.trim();
     if (!hrEmail) {
       alert('Please enter the report recipient email in HR Configuration.');
@@ -95,17 +106,24 @@ export function HrConfigTab() {
       alert(bankValidation.errors[0]);
       return;
     }
-    saveConfig({
-      hrEmail,
-      techCount: parseInt(form.techCount, 10) || envNumber('DEFAULT_TECH_QUESTION_COUNT'),
-      nonTechCount: bankValidation.stats.sectionCount,
-      nonTechBank: trimmedBank,
-      passThreshold: parseInt(form.passThreshold, 10) || envNumber('DEFAULT_PASS_THRESHOLD'),
-      voiceName: selectValue,
-    });
-    setSaveStatus(true);
-    setTimeout(() => setSaveStatus(false), 2500);
-    setEditorVisible(false);
+    setSaving(true);
+    try {
+      await saveConfig({
+        hrEmail,
+        techCount: parseInt(form.techCount, 10) || envNumber('DEFAULT_TECH_QUESTION_COUNT'),
+        nonTechCount: bankValidation.stats.sectionCount,
+        nonTechBank: trimmedBank,
+        passThreshold: parseInt(form.passThreshold, 10) || envNumber('DEFAULT_PASS_THRESHOLD'),
+        voiceName: selectValue,
+      });
+      setSaveStatus(true);
+      setTimeout(() => setSaveStatus(false), 2500);
+      setEditorVisible(false);
+    } catch (e) {
+      alert(`Failed to save configuration: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleAddSection() {
@@ -188,9 +206,18 @@ export function HrConfigTab() {
       <h2 className="text-xl font-bold mb-4">HR Configuration</h2>
       <p className="text-sm text-gray-600 mb-4">
         Configure report delivery, question counts, behavioral sections, pass threshold, and
-        interviewer voice. These HR settings are saved in this browser and reused for future
+        interviewer voice. These HR settings are saved to your account and reused for future
         interviews.
       </p>
+
+      {configStatus === 'loading' && (
+        <p className="text-sm text-gray-500 mb-4">Loading your saved configuration…</p>
+      )}
+      {configStatus === 'error' && (
+        <p className="text-sm text-red-600 mb-4">
+          Could not load your saved configuration. You can still edit and save below.
+        </p>
+      )}
 
       {hasSavedConfig && (
         <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-lg">
@@ -411,13 +438,23 @@ export function HrConfigTab() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button className="btn-primary" onClick={handleSave} disabled={validation.errors.length > 0}>Save Configuration</button>
+            <button
+              className="btn-primary"
+              onClick={handleSave}
+              disabled={validation.errors.length > 0 || saving}
+            >
+              {saving ? 'Saving…' : 'Save Configuration'}
+            </button>
             {hasSavedConfig && (
-              <button className="btn-secondary" onClick={() => { loadFromConfig(); setEditorVisible(false); }}>
+              <button
+                className="btn-secondary"
+                disabled={saving}
+                onClick={() => { loadFromConfig(); setEditorVisible(false); }}
+              >
                 Cancel
               </button>
             )}
-            {saveStatus && <span className="text-sm text-green-600">✓ Saved</span>}
+            {saveStatus && <span className="text-sm text-green-600">✓ Saved to your account</span>}
           </div>
         </div>
       )}

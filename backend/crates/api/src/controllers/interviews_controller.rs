@@ -7,17 +7,19 @@ use axum::{
     Json,
 };
 use domain::ConfigSnapshot;
+use persistence::repo_auth;
 use persistence::repo_outbox;
 use persistence::repo_realtime;
 use persistence::repo_session::{self, NewReport, NewSession};
 use serde::Deserialize;
-use serde_json::{json, Value as JsonValue};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
     app::AppState,
     auth::HrPrincipal,
     error::{ApiError, ApiResult},
+    models::config::HrConfig,
     models::interviews::{
         CreateInterviewRequest, CreateInterviewResponse, FinalizeResponse, ReportPayload,
     },
@@ -27,12 +29,6 @@ use crate::{
 
 const MAX_JD_BYTES: usize = 64 * 1024;
 const MAX_RESUME_BYTES: usize = 256 * 1024;
-const MIN_TECH_COUNT: u16 = 1;
-const MAX_TECH_COUNT: u16 = 20;
-const MIN_BEHAVIORAL_COUNT: u16 = 0;
-const MAX_BEHAVIORAL_COUNT: u16 = 20;
-const MIN_PASS_THRESHOLD: i16 = 0;
-const MAX_PASS_THRESHOLD: i16 = 100;
 
 pub async fn create(
     State(state): State<AppState>,
@@ -41,25 +37,26 @@ pub async fn create(
 ) -> ApiResult<impl IntoResponse> {
     validate_create(&body)?;
 
-    let tech_count = body
-        .tech_count
-        .unwrap_or(10)
-        .clamp(MIN_TECH_COUNT, MAX_TECH_COUNT);
-    let behavioral_count = body
-        .behavioral_count
-        .unwrap_or(3)
-        .clamp(MIN_BEHAVIORAL_COUNT, MAX_BEHAVIORAL_COUNT);
-    let pass_threshold = body
-        .pass_threshold
-        .unwrap_or(state.cfg.default_pass_threshold)
-        .clamp(MIN_PASS_THRESHOLD, MAX_PASS_THRESHOLD);
+    // HR config is account-scoped and loaded server-side — the client only
+    // sends candidate/session input.
+    let stored = repo_auth::load_hr_config(&state.pools.read, principal.account_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::BadRequest(
+                "HR configuration not set; save it in HR Configuration first".into(),
+            )
+        })?;
+    let config: HrConfig = serde_json::from_value(stored)
+        .map_err(|e| ApiError::Internal(format!("stored hr_config is invalid: {e}")))?;
+    let config = config.normalized();
+    config.validate().map_err(ApiError::BadRequest)?;
 
     let snapshot = ConfigSnapshot {
-        tech_count,
-        behavioral_count,
+        tech_count: config.tech_count,
+        behavioral_count: config.behavioral_count,
         include_intro: body.include_intro,
-        pass_threshold,
-        behavioral_bank: body.behavioral_bank,
+        pass_threshold: config.pass_threshold,
+        behavioral_bank: config.behavioral_bank.clone(),
     };
 
     let new_session = NewSession {
@@ -68,8 +65,8 @@ pub async fn create(
         role_title: body.role_title.trim().to_string(),
         jd_text: body.jd_text,
         resume_text: body.resume_text,
-        hr_email: body.hr_email.trim().to_string(),
-        pass_threshold,
+        hr_email: config.hr_email.trim().to_string(),
+        pass_threshold: config.pass_threshold,
         include_intro: body.include_intro,
         config_snapshot: snapshot,
         session_ttl_hours: state.cfg.session_ttl_hours,
@@ -103,12 +100,6 @@ fn validate_create(req: &CreateInterviewRequest) -> Result<(), ApiError> {
     if req.role_title.trim().is_empty() {
         return Err(ApiError::BadRequest("role_title is required".into()));
     }
-    if req.hr_email.trim().is_empty() {
-        return Err(ApiError::BadRequest("hr_email is required".into()));
-    }
-    if !req.hr_email.contains('@') {
-        return Err(ApiError::BadRequest("hr_email looks invalid".into()));
-    }
     if req.jd_text.trim().is_empty() {
         return Err(ApiError::BadRequest("jd_text is required".into()));
     }
@@ -124,15 +115,6 @@ fn validate_create(req: &CreateInterviewRequest) -> Result<(), ApiError> {
         return Err(ApiError::BadRequest(format!(
             "resume_text exceeds {MAX_RESUME_BYTES} bytes"
         )));
-    }
-    match &req.behavioral_bank {
-        JsonValue::Object(m) if !m.is_empty() => {}
-        JsonValue::Array(a) if !a.is_empty() => {}
-        _ => {
-            return Err(ApiError::BadRequest(
-                "behavioral_bank must be a non-empty object or array".into(),
-            ));
-        }
     }
     Ok(())
 }

@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
 import { useAppState } from '../providers/AppStateProvider.jsx';
 import { createInterview } from '../api/client.js';
-import { parseNonTechBank } from '../interview/non-tech-bank.js';
 import { PdfTextarea } from './PdfTextarea.jsx';
 import { copyToClipboard } from '../utils/clipboard.js';
 
 export function GenerateLinkTab() {
-  const { config } = useAppState();
+  const { configStatus, hasSavedConfig } = useAppState();
+  const configLoading = configStatus === 'loading' || configStatus === 'idle';
   const linkRef = useRef(null);
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
@@ -24,10 +24,15 @@ export function GenerateLinkTab() {
     const j = jd.trim();
     const res = resume.trim();
     if (!n || !r || !j || !res) { alert('Please fill in all four fields.'); return; }
-    if (!config.hrEmail) { alert('Please set the report recipient email in HR Configuration first.'); return; }
-    if (!config.nonTechBank) { alert('Please add the behavioral question bank in HR Configuration first.'); return; }
+    if (configLoading) {
+      alert('HR configuration is still loading. Please wait a moment and try again.');
+      return;
+    }
+    if (!hasSavedConfig) {
+      alert('Please set up HR Configuration (recipient email and behavioral questions) before generating a link.');
+      return;
+    }
 
-    const behavioralBank = parseNonTechBank(config.nonTechBank);
     setShowBox(true);
     setLinkValue('⏳ Creating session...');
     setInfo({ tone: 'gray', text: 'The backend is generating personalized questions. This usually takes 10-20 seconds — the candidate experience will be instant.' });
@@ -38,12 +43,7 @@ export function GenerateLinkTab() {
         role_title: r,
         jd_text: j,
         resume_text: res,
-        hr_email: config.hrEmail,
         include_intro: true,
-        tech_count: config.techCount,
-        behavioral_count: config.nonTechCount,
-        pass_threshold: config.passThreshold,
-        behavioral_bank: behavioralBank,
       });
       setLinkValue(created.share_url);
       setInfo({ tone: 'green', shortcode: created.shortcode, expiresAt: created.expires_at });
@@ -97,7 +97,9 @@ export function GenerateLinkTab() {
         placeholder="Paste the resume here, or upload a PDF above..."
       />
 
-      <button className="btn-primary" disabled={busy} onClick={handleGenerate}>🔗 Generate Link</button>
+      <button className="btn-primary" disabled={busy || configLoading} onClick={handleGenerate}>
+        {configLoading ? '⏳ Loading configuration…' : '🔗 Generate Link'}
+      </button>
 
       {showBox && (
         <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">

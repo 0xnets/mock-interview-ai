@@ -5,6 +5,8 @@ import {
   clearSession,
   registerRefresh,
 } from '../app/auth-store.js';
+import { parseNonTechBank } from '../interview/non-tech-bank.js';
+import { serializeBank } from '../interview/bank-editor.js';
 
 /** @typedef {import('./types.js').LoginResponse} LoginResponse */
 /** @typedef {import('./types.js').RefreshResponse} RefreshResponse */
@@ -212,6 +214,54 @@ export async function createInterview(payload) {
     body: payload,
     auth: 'required',
   });
+}
+
+// ─── HR config ───────────────────────────────────────────────────────────────
+
+/// Translate the backend HR config (snake_case, structured behavioral_bank)
+/// into the camelCase shape the app provider/components use. The behavioral
+/// bank is kept as `## Section` textarea text on the frontend.
+function fromApiConfig(resp) {
+  const c = (resp && resp.config) || {};
+  return {
+    config: {
+      hrEmail: c.hr_email || '',
+      techCount: Number(c.tech_count) || 0,
+      nonTechCount: Number(c.behavioral_count) || 0,
+      nonTechBank: serializeBank(c.behavioral_bank || {}),
+      passThreshold: Number(c.pass_threshold) || 0,
+      voiceName: c.voice_name || '',
+    },
+    saved: Boolean(resp && resp.saved),
+  };
+}
+
+/** @param {object} config camelCase provider config */
+function toApiConfig(config) {
+  return {
+    hr_email: String(config.hrEmail || '').trim(),
+    tech_count: Number(config.techCount) || 0,
+    behavioral_count: Number(config.nonTechCount) || 0,
+    behavioral_bank: parseNonTechBank(config.nonTechBank || ''),
+    pass_threshold: Number(config.passThreshold) || 0,
+    voice_name: config.voiceName || '',
+  };
+}
+
+/// Load the current account's HR config. Returns `{ config, saved }` —
+/// `saved` is false when the account is receiving backend defaults.
+export async function getHrConfig() {
+  return fromApiConfig(await apiFetch('/v1/me/config', { auth: 'required' }));
+}
+
+/// Persist the current account's HR config. Returns the saved, normalized
+/// config from the backend as `{ config, saved }`.
+export async function updateHrConfig(config) {
+  return fromApiConfig(await apiFetch('/v1/me/config', {
+    method: 'PUT',
+    body: toApiConfig(config),
+    auth: 'required',
+  }));
 }
 
 /// Public state lookup. Returns `{id, state, candidate_name, role_title, expires_at, shortcode}`.

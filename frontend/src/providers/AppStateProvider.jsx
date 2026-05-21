@@ -1,26 +1,23 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { ENV, envNumber } from '../app/env.js';
+import { envNumber } from '../app/env.js';
 import { setSavedVoiceName } from '../voice/voice-selection.js';
+import { useAuth } from './AuthProvider.jsx';
+import { getHrConfig, updateHrConfig } from '../api/client.js';
 
 const AppStateContext = createContext(null);
+
+/// Roles whose accounts carry a reusable HR configuration.
+const HR_ROLES = ['hr', 'admin', 'super_admin'];
 
 function defaultConfig() {
   return {
     hrEmail: '',
     techCount: envNumber('DEFAULT_TECH_QUESTION_COUNT'),
-    nonTechCount: envNumber('DEFAULT_NON_TECH_QUESTION_COUNT'),
+    nonTechCount: 0,
     nonTechBank: '',
     passThreshold: envNumber('DEFAULT_PASS_THRESHOLD'),
     voiceName: '',
   };
-}
-
-function loadStoredConfig() {
-  try {
-    const saved = localStorage.getItem(ENV.LOCAL_STORAGE_CONFIG_KEY);
-    if (saved) return { config: { ...defaultConfig(), ...JSON.parse(saved) }, hasSaved: true };
-  } catch { /* ignore malformed storage */ }
-  return { config: defaultConfig(), hasSaved: false };
 }
 
 /// Interview data that must survive a screen change (loading → welcome →
@@ -40,19 +37,61 @@ const emptyInterview = {
 };
 
 export function AppStateProvider({ children }) {
-  const [{ config, hasSaved }, setConfigState] = useState(() => {
-    const loaded = loadStoredConfig();
-    return { config: loaded.config, hasSaved: loaded.hasSaved };
-  });
+  const { isAuthenticated, principal } = useAuth();
+
+  // HR config is account-scoped and lives on the backend. It starts as
+  // defaults and is replaced once an authenticated HR session loads it.
+  const [config, setConfig] = useState(defaultConfig);
+  // idle | loading | ready | saving | error
+  const [configStatus, setConfigStatus] = useState('idle');
+  const [hasSavedConfig, setHasSavedConfig] = useState(false);
+
   const [interview, setInterview] = useState(emptyInterview);
 
   // Keep the framework-agnostic speak() voice resolution in sync with config.
   useEffect(() => { setSavedVoiceName(config.voiceName); }, [config.voiceName]);
 
-  const saveConfig = useCallback((next) => {
-    localStorage.setItem(ENV.LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(next));
-    setConfigState({ config: next, hasSaved: true });
+  const loadConfig = useCallback(async () => {
+    setConfigStatus('loading');
+    try {
+      const { config: loaded, saved } = await getHrConfig();
+      setConfig(loaded);
+      setHasSavedConfig(saved);
+      setConfigStatus('ready');
+      return loaded;
+    } catch (e) {
+      setConfigStatus('error');
+      throw e;
+    }
   }, []);
+
+  const saveConfig = useCallback(async (next) => {
+    setConfigStatus('saving');
+    try {
+      const { config: saved } = await updateHrConfig(next);
+      setConfig(saved);
+      setHasSavedConfig(true);
+      setConfigStatus('ready');
+      return saved;
+    } catch (e) {
+      // A failed save does not invalidate the already-loaded config.
+      setConfigStatus('ready');
+      throw e;
+    }
+  }, []);
+
+  // Load the account's HR config once an authenticated HR/admin/super_admin
+  // session is available; reset to defaults when the session ends.
+  const role = principal?.role;
+  useEffect(() => {
+    if (isAuthenticated && HR_ROLES.includes(role)) {
+      loadConfig().catch(() => { /* surfaced via configStatus */ });
+    } else {
+      setConfig(defaultConfig());
+      setHasSavedConfig(false);
+      setConfigStatus('idle');
+    }
+  }, [isAuthenticated, role, loadConfig]);
 
   const updateInterview = useCallback((patch) => {
     setInterview(prev => ({ ...prev, ...patch }));
@@ -62,7 +101,9 @@ export function AppStateProvider({ children }) {
 
   const value = {
     config,
-    hasSavedConfig: hasSaved,
+    configStatus,
+    hasSavedConfig,
+    loadConfig,
     saveConfig,
     interview,
     updateInterview,

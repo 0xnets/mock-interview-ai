@@ -143,6 +143,40 @@ pub async fn create_invited_account(pool: &PgPool, req: NewAccount) -> Result<Uu
     Ok(inserted.ok_or(DbError::Conflict)?.0)
 }
 
+// ─── HR config (accounts.hr_config) ─────────────────────────────────────────
+
+/// Load the stored HR config blob for an account. Returns `None` when the
+/// account has no config stored yet (the column is NULL).
+pub async fn load_hr_config(
+    pool: &PgPool,
+    account_id: Uuid,
+) -> Result<Option<serde_json::Value>, DbError> {
+    let row: Option<(Option<serde_json::Value>,)> =
+        sqlx::query_as("SELECT hr_config FROM accounts WHERE id = $1")
+            .bind(account_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.and_then(|r| r.0))
+}
+
+/// Persist the HR config blob for an account. Errors `NotFound` if the account
+/// row does not exist.
+pub async fn save_hr_config(
+    pool: &PgPool,
+    account_id: Uuid,
+    config: &serde_json::Value,
+) -> Result<(), DbError> {
+    let result = sqlx::query("UPDATE accounts SET hr_config = $2 WHERE id = $1")
+        .bind(account_id)
+        .bind(config)
+        .execute(pool)
+        .await?;
+    if result.rows_affected() == 0 {
+        return Err(DbError::NotFound);
+    }
+    Ok(())
+}
+
 // ─── refresh tokens ─────────────────────────────────────────────────────────
 
 pub fn hash_token(raw: &str) -> Vec<u8> {

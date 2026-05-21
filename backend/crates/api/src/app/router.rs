@@ -76,6 +76,11 @@ pub fn router(state: AppState) -> Router {
             "/v1/interviews",
             post(controllers::interviews_controller::create),
         )
+        .route(
+            "/v1/me/config",
+            get(controllers::config_controller::get_config)
+                .put(controllers::config_controller::put_config),
+        )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_hr,
