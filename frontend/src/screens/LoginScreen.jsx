@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { login } from '../api/client.js';
+import { useToast } from '../providers/ToastProvider.jsx';
 import { isValidEmail } from '../utils/validation.js';
 
 export function LoginScreen() {
   const navigate = useNavigate();
   const location = useLocation();
+  const toast = useToast();
   const [email, setEmail] = useState(location.state?.email || '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,6 +26,7 @@ export function LoginScreen() {
     setBusy(true);
     try {
       await login(email, password);
+      toast.success('Signed in successfully.');
       navigate('/setup');
     } catch (e) {
       const detail = e?.status === 429 && e.retryAfter

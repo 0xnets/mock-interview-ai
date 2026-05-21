@@ -109,7 +109,7 @@ impl SessionActor {
     }
 
     async fn send_hello(&mut self) -> anyhow::Result<()> {
-        let total = self.questions.len() as u32;
+        let total = self.planned_total_questions();
         let msg = ServerMsg::Hello {
             session_id: self.session.id.to_string(),
             candidate_name: self.session.candidate_name.clone(),
@@ -150,6 +150,8 @@ impl SessionActor {
             return self.finish().await;
         }
         let q = self.questions[self.cursor].clone();
+        let question_number = (self.cursor + 1) as u32;
+        let total_questions = self.planned_total_questions();
         let msg = if q.kind == "followup" {
             let parent_ordinal = self
                 .questions
@@ -159,17 +161,36 @@ impl SessionActor {
                 .unwrap_or(q.ordinal - 1);
             ServerMsg::Followup {
                 ordinal: q.ordinal,
+                question_number,
+                total_questions,
                 parent_ordinal,
                 text: q.prompt_text,
             }
         } else {
             ServerMsg::Question {
                 ordinal: q.ordinal,
+                question_number,
+                total_questions,
                 kind: q.kind,
                 text: q.prompt_text,
             }
         };
         self.send(msg).await
+    }
+
+    fn planned_total_questions(&self) -> u32 {
+        self.questions
+            .iter()
+            .map(|q| {
+                if q.kind == "technical" {
+                    2
+                } else if q.kind == "followup" {
+                    0
+                } else {
+                    1
+                }
+            })
+            .sum()
     }
 
     async fn run(&mut self) -> anyhow::Result<()> {

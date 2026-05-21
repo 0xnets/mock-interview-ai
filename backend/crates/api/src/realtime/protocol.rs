@@ -19,12 +19,16 @@ pub enum ServerMsg {
     /// Deliver the next primary question (intro/technical/behavioral).
     Question {
         ordinal: i16,
+        question_number: u32,
+        total_questions: u32,
         kind: String,
         text: String,
     },
     /// Deliver an AI follow-up to a technical primary.
     Followup {
         ordinal: i16,
+        question_number: u32,
+        total_questions: u32,
         parent_ordinal: i16,
         text: String,
     },

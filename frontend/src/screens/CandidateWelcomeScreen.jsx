@@ -10,6 +10,7 @@ const initialChecks = PRE_INTERVIEW_CHECKS.map(check => ({
   label: check.label,
   status: 'idle',
   detail: 'Not checked yet.',
+  retryable: false,
 }));
 
 function statusGlyph(status) {
@@ -70,66 +71,94 @@ function PreInterviewCheckPanel({ shortcode, onStart }) {
     }
   }
 
-  async function runChecks() {
+  async function runSingleCheck(check) {
+    patchCheck(check.id, { status: 'running', detail: 'Checking…', retryable: false });
+    try {
+      const result = await check.run({
+        shortcode,
+        onProgress: detail => patchCheck(check.id, { detail }),
+      });
+      if (result.needsConfirmation) {
+        patchCheck(check.id, {
+          status: 'confirming',
+          detail: result.needsConfirmation.question,
+          retryable: false,
+        });
+        const confirmed = await new Promise(resolve => {
+          confirmationResolveRef.current = resolve;
+          setConfirmingCheckId(check.id);
+        });
+        confirmationResolveRef.current = null;
+        setConfirmingCheckId('');
+        const detail = confirmed
+          ? result.needsConfirmation.passDetail
+          : result.needsConfirmation.failDetail;
+        patchCheck(check.id, {
+          status: confirmed ? 'passed' : 'failed',
+          detail,
+          retryable: !confirmed,
+        });
+        return confirmed
+          ? null
+          : { id: check.id, systemCheck: check.systemCheck, detail, retryable: true };
+      }
+
+      patchCheck(check.id, {
+        status: result.ok ? 'passed' : 'failed',
+        detail: result.detail,
+        retryable: Boolean(result.retryable),
+      });
+      return result.ok
+        ? null
+        : {
+            id: check.id,
+            systemCheck: check.systemCheck,
+            detail: result.detail,
+            retryable: Boolean(result.retryable),
+          };
+    } catch (e) {
+      const detail = e?.message || 'Check failed.';
+      patchCheck(check.id, { status: 'failed', detail, retryable: true });
+      return { id: check.id, systemCheck: check.systemCheck, detail, retryable: true };
+    }
+  }
+
+  async function runChecksFrom(startIndex, resetChecks) {
     setRunning(true);
     setConfirmingCheckId('');
     setIncompatNotice('');
     confirmationResolveRef.current = null;
-    setChecks(initialChecks.map(check => ({ ...check, status: 'idle', detail: 'Waiting…' })));
+    if (resetChecks) {
+      setChecks(initialChecks.map(check => ({ ...check, status: 'idle', detail: 'Waiting…' })));
+    } else {
+      setChecks(prev => prev.map((check, index) => (
+        index >= startIndex
+          ? { ...check, status: 'idle', detail: 'Waiting…', retryable: false }
+          : check
+      )));
+    }
 
-    let failure = null; // { id, systemCheck, detail }
-
-    for (const check of PRE_INTERVIEW_CHECKS) {
-      patchCheck(check.id, { status: 'running', detail: 'Checking…' });
-      try {
-        const result = await check.run({
-          shortcode,
-          onProgress: detail => patchCheck(check.id, { detail }),
-        });
-        if (result.needsConfirmation) {
-          patchCheck(check.id, {
-            status: 'confirming',
-            detail: result.needsConfirmation.question,
-          });
-          const confirmed = await new Promise(resolve => {
-            confirmationResolveRef.current = resolve;
-            setConfirmingCheckId(check.id);
-          });
-          confirmationResolveRef.current = null;
-          setConfirmingCheckId('');
-          const detail = confirmed
-            ? result.needsConfirmation.passDetail
-            : result.needsConfirmation.failDetail;
-          patchCheck(check.id, {
-            status: confirmed ? 'passed' : 'failed',
-            detail,
-          });
-          if (!confirmed) {
-            failure = { id: check.id, systemCheck: check.systemCheck, detail };
-            break;
-          }
-          continue;
-        }
-        patchCheck(check.id, {
-          status: result.ok ? 'passed' : 'failed',
-          detail: result.detail,
-        });
-        if (!result.ok) {
-          failure = { id: check.id, systemCheck: check.systemCheck, detail: result.detail };
-          break;
-        }
-      } catch (e) {
-        const detail = e?.message || 'Check failed.';
-        patchCheck(check.id, { status: 'failed', detail });
-        failure = { id: check.id, systemCheck: check.systemCheck, detail };
-        break;
-      }
+    let failure = null;
+    for (const check of PRE_INTERVIEW_CHECKS.slice(startIndex)) {
+      failure = await runSingleCheck(check);
+      if (failure) break;
     }
 
     setRunning(false);
 
-    if (failure && failure.systemCheck) {
+    if (failure && failure.systemCheck && !failure.retryable) {
       await reportIncompatibility(failure);
+    }
+  }
+
+  async function runChecks() {
+    await runChecksFrom(0, true);
+  }
+
+  async function retryCheck(id) {
+    const startIndex = PRE_INTERVIEW_CHECKS.findIndex(check => check.id === id);
+    if (startIndex >= 0) {
+      await runChecksFrom(startIndex, false);
     }
   }
 
@@ -183,6 +212,15 @@ function PreInterviewCheckPanel({ shortcode, onStart }) {
                     No, retry needed
                   </button>
                 </div>
+              )}
+              {check.status === 'failed' && check.retryable && (
+                <button
+                  className="btn-secondary text-sm mt-3"
+                  disabled={running}
+                  onClick={() => retryCheck(check.id)}
+                >
+                  Retry {check.label}
+                </button>
               )}
             </div>
           </div>

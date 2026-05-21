@@ -2,8 +2,9 @@ import { fetchSessionByCode } from '../api/client.js';
 import { ensureVoicesLoaded, getSelectedVoice } from '../voice/voice-selection.js';
 import { speak } from '../voice/speech-synthesis.js';
 
-const MIC_LEVEL_SAMPLE_MS = 2500;
+const MIC_LEVEL_SAMPLE_MS = 5000;
 const MIC_MIN_RMS_LEVEL = 0.015;
+const MIC_NO_INPUT_RMS_LEVEL = 0.002;
 
 const SpeechRecognitionApi = () => (
   typeof window !== 'undefined'
@@ -53,7 +54,7 @@ async function measureMicrophoneLevel(stream, onProgress) {
 
   let ctx;
   try {
-    onProgress?.('Speak a few words now. Checking microphone input level…');
+    onProgress?.('Speak now for the next 5 seconds. Checking microphone input level…');
     ctx = new AudioContextApi();
     await ctx.resume();
 
@@ -77,10 +78,19 @@ async function measureMicrophoneLevel(stream, onProgress) {
       await new Promise(resolve => requestAnimationFrame(resolve));
     }
 
+    if (maxRms < MIC_NO_INPUT_RMS_LEVEL) {
+      return {
+        ok: false,
+        retryable: true,
+        detail: `No voice input was detected during the 5-second microphone check. Speak clearly while the check is running, then retry. Peak level: ${maxRms.toFixed(3)}.`,
+      };
+    }
+
     if (maxRms < MIC_MIN_RMS_LEVEL) {
       return {
         ok: false,
-        detail: `Microphone is connected, but input was too quiet. Speak closer to the mic and retry. Peak level: ${maxRms.toFixed(3)}.`,
+        retryable: true,
+        detail: `Microphone input was too quiet during the 5-second check. Speak closer to the mic and retry. Peak level: ${maxRms.toFixed(3)}.`,
       };
     }
 
@@ -103,7 +113,9 @@ async function checkMicrophone({ onProgress } = {}) {
     if (audioTracks.length === 0) {
       return { ok: false, detail: 'No microphone track was provided by the browser.' };
     }
-    return measureMicrophoneLevel(stream, onProgress);
+    // Must await: the finally below stops the stream tracks, so returning the
+    // unawaited promise would kill the mic before measurement runs.
+    return await measureMicrophoneLevel(stream, onProgress);
   } catch (e) {
     const denied = e?.name === 'NotAllowedError' || e?.name === 'SecurityError';
     return {
@@ -117,7 +129,7 @@ async function checkMicrophone({ onProgress } = {}) {
   }
 }
 
-async function checkSpeaker() {
+async function checkSpeaker({ onProgress } = {}) {
   const AudioContextApi = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextApi) {
     return { ok: false, detail: 'Web Audio is not available for the speaker test.' };
@@ -127,16 +139,26 @@ async function checkSpeaker() {
   try {
     ctx = new AudioContextApi();
     await ctx.resume();
+
+    // Warn before the tone so the candidate knows to listen — otherwise the
+    // beep plays unannounced and the "did you hear it?" prompt only shows
+    // afterwards, making it easy to miss entirely.
+    onProgress?.('Listen for a short beep — playing the speaker test tone now…');
+    await new Promise(resolve => setTimeout(resolve, 600));
+
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
     oscillator.type = 'sine';
     oscillator.frequency.value = 660;
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.03);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.22);
+    // Attack to an audible level, hold a clear sustain, then release.
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.2, now + 0.04);
+    gain.gain.setValueAtTime(0.2, now + 0.5);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
     oscillator.connect(gain).connect(ctx.destination);
-    oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.25);
+    oscillator.start(now);
+    oscillator.stop(now + 0.65);
     await new Promise(resolve => {
       oscillator.onended = resolve;
     });

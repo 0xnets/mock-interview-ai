@@ -16,8 +16,10 @@ use persistence::repo_reports::ReportForRender;
 const PAGE_W: f32 = 210.0;
 const PAGE_H: f32 = 297.0;
 const MARGIN: f32 = 18.0;
+const CONTENT_W: f32 = PAGE_W - 2.0 * MARGIN;
 const TOP: f32 = 280.0;
 const BOTTOM: f32 = 18.0;
+const PT_TO_MM: f32 = 0.352_778;
 
 struct Cursor {
     y: f32,
@@ -52,8 +54,26 @@ impl Cursor {
         bold: bool,
         color: Option<(f32, f32, f32)>,
     ) {
+        self.write_wrapped(doc, text, size, bold, color, MARGIN, CONTENT_W, MARGIN);
+    }
+
+    fn write_wrapped(
+        &mut self,
+        doc: &PdfDocumentReference,
+        text: &str,
+        size: f32,
+        bold: bool,
+        color: Option<(f32, f32, f32)>,
+        x: f32,
+        width: f32,
+        continuation_x: f32,
+    ) {
         let line_h = size * 0.42;
-        for chunk in wrap(text, max_chars_for(size)) {
+        let continuation_w = PAGE_W - MARGIN - continuation_x;
+        for (idx, chunk) in wrap_to_width(text, width, continuation_w, size)
+            .into_iter()
+            .enumerate()
+        {
             self.ensure_room(doc, line_h + 1.0);
             if let Some((r, g, b)) = color {
                 self.layer
@@ -67,7 +87,7 @@ impl Cursor {
             self.layer.use_text(
                 chunk,
                 size,
-                Mm(MARGIN),
+                Mm(if idx == 0 { x } else { continuation_x }),
                 Mm(self.y),
                 if bold { &self.bold } else { &self.regular },
             );
@@ -207,10 +227,28 @@ pub fn render_report_pdf(r: &ReportForRender) -> Result<Vec<u8>> {
             };
             c.write_line(&doc, &header, 11.0, true, Some((0.20, 0.20, 0.20)));
             if !question.is_empty() {
-                c.write_line(&doc, &format!("Question: {question}"), 9.0, false, None);
+                c.write_wrapped(
+                    &doc,
+                    &format!("Question: {question}"),
+                    9.0,
+                    false,
+                    None,
+                    MARGIN,
+                    CONTENT_W,
+                    MARGIN + 17.0,
+                );
             }
             if !feedback.is_empty() {
-                c.write_line(&doc, &format!("Feedback: {feedback}"), 9.0, false, None);
+                c.write_wrapped(
+                    &doc,
+                    &format!("Feedback: {feedback}"),
+                    9.0,
+                    false,
+                    None,
+                    MARGIN,
+                    CONTENT_W,
+                    MARGIN + 17.0,
+                );
             }
             if let Some(secs) = it.get("duration_seconds").and_then(|v| v.as_i64()) {
                 let bucket = it
@@ -250,50 +288,68 @@ fn bullet_section(
     if let Some(arr) = items.as_array() {
         for it in arr {
             if let Some(s) = it.as_str() {
-                c.write_line(doc, &format!("• {s}"), 10.0, false, None);
+                c.write_wrapped(
+                    doc,
+                    &format!("- {s}"),
+                    10.0,
+                    false,
+                    None,
+                    MARGIN,
+                    CONTENT_W,
+                    MARGIN + 5.0,
+                );
             }
         }
     }
     c.spacer(2.0);
 }
 
-/// Approximate max characters per line for the given point size at our
-/// margin. Conservative so we rarely overflow; rendered text uses Helvetica
-/// which is mostly monospaceable for layout estimation.
-fn max_chars_for(size: f32) -> usize {
-    let width = PAGE_W - 2.0 * MARGIN;
-    // ~1.9 chars/mm at 10pt for Helvetica; scales inversely with size.
-    let chars_per_mm = 1.9 * (10.0 / size);
-    (width * chars_per_mm) as usize
-}
-
-fn wrap(text: &str, max_chars: usize) -> Vec<String> {
-    if max_chars == 0 {
-        return vec![text.to_string()];
-    }
+fn wrap_to_width(
+    text: &str,
+    first_width_mm: f32,
+    continuation_width_mm: f32,
+    size: f32,
+) -> Vec<String> {
     let mut out = Vec::new();
-    for line in text.split('\n') {
-        if line.len() <= max_chars {
-            out.push(line.to_string());
+    for paragraph in text.split('\n') {
+        if paragraph.trim().is_empty() {
+            out.push(String::new());
             continue;
         }
         let mut current = String::new();
-        for word in line.split_whitespace() {
-            if current.is_empty() {
-                if word.len() > max_chars {
-                    // hard-split very long token
-                    for chunk in word.as_bytes().chunks(max_chars) {
-                        out.push(String::from_utf8_lossy(chunk).into_owned());
-                    }
-                } else {
-                    current.push_str(word);
-                }
-            } else if current.len() + 1 + word.len() > max_chars {
+        let mut current_width = first_width_mm;
+        for word in paragraph.split_whitespace() {
+            let candidate = if current.is_empty() {
+                word.to_string()
+            } else {
+                format!("{current} {word}")
+            };
+
+            if text_width_mm(&candidate, size) <= current_width {
+                current = candidate;
+                continue;
+            }
+
+            if !current.is_empty() {
                 out.push(std::mem::take(&mut current));
+                current_width = continuation_width_mm;
+            }
+
+            if text_width_mm(word, size) <= current_width {
                 current.push_str(word);
             } else {
-                current.push(' ');
-                current.push_str(word);
+                for chunk in split_long_word(word, current_width, size) {
+                    if current.is_empty() {
+                        current = chunk;
+                    } else {
+                        out.push(std::mem::take(&mut current));
+                        current = chunk;
+                    }
+                    if text_width_mm(&current, size) >= current_width {
+                        out.push(std::mem::take(&mut current));
+                        current_width = continuation_width_mm;
+                    }
+                }
             }
         }
         if !current.is_empty() {
@@ -301,6 +357,40 @@ fn wrap(text: &str, max_chars: usize) -> Vec<String> {
         }
     }
     out
+}
+
+fn split_long_word(word: &str, width_mm: f32, size: f32) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    for ch in word.chars() {
+        let candidate = format!("{current}{ch}");
+        if !current.is_empty() && text_width_mm(&candidate, size) > width_mm {
+            chunks.push(std::mem::take(&mut current));
+        }
+        current.push(ch);
+    }
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+    chunks
+}
+
+fn text_width_mm(text: &str, size: f32) -> f32 {
+    text.chars().map(helvetica_width_em).sum::<f32>() * size * PT_TO_MM
+}
+
+fn helvetica_width_em(ch: char) -> f32 {
+    match ch {
+        ' ' => 0.28,
+        'i' | 'j' | 'l' | '!' | '|' => 0.22,
+        'f' | 'r' | 't' | '.' | ',' | ':' | ';' | '\'' | '`' => 0.28,
+        '-' | '(' | ')' | '[' | ']' | '{' | '}' => 0.33,
+        'm' | 'w' | 'M' | 'W' => 0.83,
+        'A'..='Z' => 0.67,
+        '0'..='9' => 0.56,
+        _ if ch.is_ascii() => 0.50,
+        _ => 0.56,
+    }
 }
 
 fn pdf_to_writer(doc: PdfDocumentReference) -> Result<Vec<u8>> {
@@ -403,5 +493,29 @@ mod tests {
             answer_time_summary(&serde_json::json!({ "answered_count": 0 })),
             None,
         );
+    }
+
+    #[test]
+    fn wrap_to_width_uses_continuation_width() {
+        let wrapped = wrap_to_width(
+            "Feedback: The candidate gave a detailed answer with clear tradeoffs",
+            45.0,
+            22.0,
+            10.0,
+        );
+
+        assert!(wrapped.len() > 2);
+        assert!(text_width_mm(&wrapped[0], 10.0) <= 45.0);
+        for line in wrapped.iter().skip(1) {
+            assert!(text_width_mm(line, 10.0) <= 22.0);
+        }
+    }
+
+    #[test]
+    fn wrap_to_width_splits_long_tokens_on_character_boundaries() {
+        let wrapped = wrap_to_width("supercalifragilisticexpialidocious", 12.0, 12.0, 10.0);
+
+        assert!(wrapped.len() > 1);
+        assert_eq!(wrapped.concat(), "supercalifragilisticexpialidocious");
     }
 }

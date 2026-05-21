@@ -91,10 +91,12 @@ export function InterviewScreen() {
       ? 'Follow-up'
       : (msg.kind === 'intro' ? 'Intro' : msg.kind === 'technical' ? 'Technical' : 'Behavioral');
 
-    const total = Math.max(totalQuestionsRef.current, ordinal);
+    const questionNumber = msg.question_number || ordinal;
+    const total = Math.max(msg.total_questions || 0, totalQuestionsRef.current, questionNumber);
+    totalQuestionsRef.current = total;
     setSectionLabel('Section: ' + section);
-    setProgressText(`Question ${ordinal} of ${total}`);
-    setProgressPct(((ordinal - 1) / total) * 100);
+    setProgressText(`Question ${questionNumber} of ${total}`);
+    setProgressPct(((questionNumber - 1) / total) * 100);
     setQuestion(msg.text);
     currentQuestionRef.current = msg.text;
     setSubmitEnabled(false);

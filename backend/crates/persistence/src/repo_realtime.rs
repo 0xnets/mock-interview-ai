@@ -80,9 +80,19 @@ pub async fn list_questions(pool: &PgPool, session_id: Uuid) -> Result<Vec<Quest
     let rows: Vec<QuestionQueryRow> = sqlx::query_as(
         r#"
         SELECT id, ordinal, kind, parent_question_id, topic, prompt_text
-        FROM questions
-        WHERE session_id = $1
-        ORDER BY ordinal
+        FROM questions q
+        WHERE q.session_id = $1
+        ORDER BY
+            COALESCE(
+                (
+                    SELECT parent.ordinal
+                    FROM questions parent
+                    WHERE parent.id = q.parent_question_id
+                ),
+                q.ordinal
+            ),
+            CASE WHEN q.kind = 'followup' THEN 1 ELSE 0 END,
+            q.ordinal
         "#,
     )
     .bind(session_id)
