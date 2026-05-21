@@ -1,11 +1,35 @@
 import { useRef, useState } from 'react';
 import { useAppState } from '../providers/AppStateProvider.jsx';
+import { useToast } from '../providers/ToastProvider.jsx';
 import { createInterview } from '../api/client.js';
 import { PdfTextarea } from './PdfTextarea.jsx';
 import { copyToClipboard } from '../utils/clipboard.js';
 
+const MAX_CANDIDATE_NAME_CHARS = 120;
+const MAX_ROLE_TITLE_CHARS = 160;
+const MIN_JD_WORDS = 20;
+const MIN_RESUME_WORDS = 30;
+
+function wordCount(text) {
+  return text.split(/\s+/).filter(word => /[A-Za-z]/.test(word)).length;
+}
+
+function validateDocumentText(text, label, minWords) {
+  if (text.includes('\uFFFD')) {
+    return `${label} contains unreadable characters. Please paste cleaner text.`;
+  }
+  if (/pdf extraction failed|could not extract/i.test(text)) {
+    return `${label} appears to contain a PDF extraction error instead of document text.`;
+  }
+  if (wordCount(text) < minWords) {
+    return `${label} must contain at least ${minWords} words.`;
+  }
+  return '';
+}
+
 export function GenerateLinkTab() {
   const { configStatus, hasSavedConfig } = useAppState();
+  const toast = useToast();
   const configLoading = configStatus === 'loading' || configStatus === 'idle';
   const linkRef = useRef(null);
   const [name, setName] = useState('');
@@ -23,13 +47,25 @@ export function GenerateLinkTab() {
     const r = role.trim();
     const j = jd.trim();
     const res = resume.trim();
-    if (!n || !r || !j || !res) { alert('Please fill in all four fields.'); return; }
+    if (!n || !r || !j || !res) { toast.warning('Please fill in all four fields.'); return; }
+    if (n.length > MAX_CANDIDATE_NAME_CHARS) {
+      toast.warning(`Candidate name must be ${MAX_CANDIDATE_NAME_CHARS} characters or fewer.`);
+      return;
+    }
+    if (r.length > MAX_ROLE_TITLE_CHARS) {
+      toast.warning(`Role / Position must be ${MAX_ROLE_TITLE_CHARS} characters or fewer.`);
+      return;
+    }
+    const jdError = validateDocumentText(j, 'Job Description', MIN_JD_WORDS);
+    if (jdError) { toast.warning(jdError); return; }
+    const resumeError = validateDocumentText(res, 'Resume', MIN_RESUME_WORDS);
+    if (resumeError) { toast.warning(resumeError); return; }
     if (configLoading) {
-      alert('HR configuration is still loading. Please wait a moment and try again.');
+      toast.info('HR configuration is still loading. Please wait a moment and try again.');
       return;
     }
     if (!hasSavedConfig) {
-      alert('Please set up HR Configuration (recipient email and behavioral questions) before generating a link.');
+      toast.warning('Please set up HR Configuration (recipient email and behavioral questions) before generating a link.');
       return;
     }
 
@@ -73,11 +109,11 @@ export function GenerateLinkTab() {
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div>
           <label className="block text-sm font-semibold mb-2">Candidate Name</label>
-          <input className="input" placeholder="e.g., Priya Sharma" value={name} onChange={e => setName(e.target.value)} />
+          <input className="input" maxLength={MAX_CANDIDATE_NAME_CHARS} placeholder="e.g., Priya Sharma" value={name} onChange={e => setName(e.target.value)} />
         </div>
         <div>
           <label className="block text-sm font-semibold mb-2">Role / Position</label>
-          <input className="input" placeholder="e.g., Senior Backend Engineer" value={role} onChange={e => setRole(e.target.value)} />
+          <input className="input" maxLength={MAX_ROLE_TITLE_CHARS} placeholder="e.g., Senior Backend Engineer" value={role} onChange={e => setRole(e.target.value)} />
         </div>
       </div>
       <PdfTextarea

@@ -1,10 +1,12 @@
 import { useLocation, Navigate } from 'react-router-dom';
 import { ENV, envNumber } from '../app/env.js';
 import { useAppState } from '../providers/AppStateProvider.jsx';
+import { useToast } from '../providers/ToastProvider.jsx';
 
 export function ResultsScreen() {
   const location = useLocation();
   const { interview, config } = useAppState();
+  const toast = useToast();
   const r = interview.results;
 
   // No results in context (e.g. a direct visit or refresh) — restart.
@@ -26,9 +28,9 @@ export function ResultsScreen() {
     if (interview.reportPdfUrl) {
       window.open(interview.reportPdfUrl, '_blank', 'noopener');
     } else if (interview.reportPdfError) {
-      alert(interview.reportPdfError);
+      toast.error(interview.reportPdfError);
     } else {
-      alert('PDF is still being generated. Please try again in a few seconds.');
+      toast.info('PDF is still being generated. Please try again in a few seconds.');
     }
   }
 

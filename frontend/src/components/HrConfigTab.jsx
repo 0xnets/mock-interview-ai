@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppState } from '../providers/AppStateProvider.jsx';
+import { useToast } from '../providers/ToastProvider.jsx';
 import { useVoices } from '../hooks/useVoices.js';
 import { testVoice } from '../voice/speech-synthesis.js';
 import { envNumber } from '../app/env.js';
+import { isValidEmail } from '../utils/validation.js';
 import {
   parseBankForEditor,
   serializeBank,
@@ -19,6 +21,7 @@ const DEFAULT_NON_TECH_SECTION = 'Role Fit & Work Preferences';
 
 export function HrConfigTab() {
   const { config, configStatus, hasSavedConfig, saveConfig } = useAppState();
+  const toast = useToast();
   const voiceGroups = useVoices();
   const emailRef = useRef(null);
   const questionsRef = useRef(null);
@@ -89,21 +92,21 @@ export function HrConfigTab() {
   async function handleSave() {
     const hrEmail = form.hrEmail.trim();
     if (!hrEmail) {
-      alert('Please enter the report recipient email in HR Configuration.');
+      toast.warning('Please enter the report recipient email in HR Configuration.');
       return;
     }
-    if (!emailRef.current?.checkValidity()) {
-      alert('Please enter a valid report recipient email.');
+    if (!isValidEmail(hrEmail)) {
+      toast.warning('Please enter a valid report recipient email.');
       return;
     }
     const trimmedBank = bankText.trim();
     if (!hasBehavioralQuestions(trimmedBank)) {
-      alert('Please add at least one behavioral question.');
+      toast.warning('Please add at least one behavioral question.');
       return;
     }
     const bankValidation = validateBank(trimmedBank);
     if (bankValidation.errors.length > 0) {
-      alert(bankValidation.errors[0]);
+      toast.warning(bankValidation.errors[0]);
       return;
     }
     setSaving(true);
@@ -120,7 +123,7 @@ export function HrConfigTab() {
       setTimeout(() => setSaveStatus(false), 2500);
       setEditorVisible(false);
     } catch (e) {
-      alert(`Failed to save configuration: ${e.message}`);
+      toast.error(`Failed to save configuration: ${e.message}`);
     } finally {
       setSaving(false);
     }
@@ -129,7 +132,7 @@ export function HrConfigTab() {
   function handleAddSection() {
     const section = sectionInput.trim();
     if (!section) {
-      alert('Please enter a section name.');
+      toast.warning('Please enter a section name.');
       return;
     }
     const nextBank = appendSectionToBank(bankText, section);

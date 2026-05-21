@@ -31,6 +31,7 @@ use crate::{
         InviteListResponse, ListInvitesQuery, LoginRequest,
     },
     services::auth_session::{self, REFRESH_COOKIE},
+    validation::validate_email,
 };
 
 // ─── login ──────────────────────────────────────────────────────────────────
@@ -42,11 +43,12 @@ pub async fn login(
     Json(body): Json<LoginRequest>,
 ) -> ApiResult<impl IntoResponse> {
     let email = body.email.trim().to_lowercase();
-    if email.is_empty() || body.password.is_empty() {
+    if body.password.is_empty() {
         return Err(ApiError::BadRequest(
             "email and password are required".into(),
         ));
     }
+    validate_email(&email, "email").map_err(ApiError::BadRequest)?;
 
     let event_id = Uuid::new_v4();
 
@@ -218,9 +220,7 @@ pub async fn create_invite(
     Json(body): Json<CreateInviteRequest>,
 ) -> ApiResult<Json<CreateInviteResponse>> {
     let email = body.email.trim().to_lowercase();
-    if email.is_empty() || !email.contains('@') {
-        return Err(ApiError::BadRequest("invalid email".into()));
-    }
+    validate_email(&email, "email").map_err(ApiError::BadRequest)?;
     if !matches!(body.role.as_str(), "hr" | "admin") {
         return Err(ApiError::BadRequest("role must be hr or admin".into()));
     }

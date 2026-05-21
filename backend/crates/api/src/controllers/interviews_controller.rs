@@ -25,6 +25,10 @@ use crate::{
     },
     realtime::grade,
     shortcode::generate_shortcode,
+    validation::{
+        validate_document_text, validate_short_text, MAX_CANDIDATE_NAME_CHARS,
+        MAX_ROLE_TITLE_CHARS, MIN_JD_WORDS, MIN_RESUME_WORDS,
+    },
 };
 
 const MAX_JD_BYTES: usize = 64 * 1024;
@@ -94,28 +98,23 @@ pub async fn create(
 }
 
 fn validate_create(req: &CreateInterviewRequest) -> Result<(), ApiError> {
-    if req.candidate_name.trim().is_empty() {
-        return Err(ApiError::BadRequest("candidate_name is required".into()));
-    }
-    if req.role_title.trim().is_empty() {
-        return Err(ApiError::BadRequest("role_title is required".into()));
-    }
-    if req.jd_text.trim().is_empty() {
-        return Err(ApiError::BadRequest("jd_text is required".into()));
-    }
-    if req.resume_text.trim().is_empty() {
-        return Err(ApiError::BadRequest("resume_text is required".into()));
-    }
-    if req.jd_text.len() > MAX_JD_BYTES {
-        return Err(ApiError::BadRequest(format!(
-            "jd_text exceeds {MAX_JD_BYTES} bytes"
-        )));
-    }
-    if req.resume_text.len() > MAX_RESUME_BYTES {
-        return Err(ApiError::BadRequest(format!(
-            "resume_text exceeds {MAX_RESUME_BYTES} bytes"
-        )));
-    }
+    validate_short_text(
+        &req.candidate_name,
+        "candidate_name",
+        MAX_CANDIDATE_NAME_CHARS,
+    )
+    .map_err(ApiError::BadRequest)?;
+    validate_short_text(&req.role_title, "role_title", MAX_ROLE_TITLE_CHARS)
+        .map_err(ApiError::BadRequest)?;
+    validate_document_text(&req.jd_text, "jd_text", MAX_JD_BYTES, MIN_JD_WORDS)
+        .map_err(ApiError::BadRequest)?;
+    validate_document_text(
+        &req.resume_text,
+        "resume_text",
+        MAX_RESUME_BYTES,
+        MIN_RESUME_WORDS,
+    )
+    .map_err(ApiError::BadRequest)?;
     Ok(())
 }
 

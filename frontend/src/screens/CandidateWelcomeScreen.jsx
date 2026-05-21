@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAppState } from '../providers/AppStateProvider.jsx';
+import { useToast } from '../providers/ToastProvider.jsx';
 import { PRE_INTERVIEW_CHECKS } from '../system/pre-interview-checks.js';
 import { issueJoinNonce, reportSystemIncompatible } from '../api/client.js';
 
@@ -219,6 +220,7 @@ export function CandidateWelcomeScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { interview, updateInterview } = useAppState();
+  const toast = useToast();
 
   // Reached without a loaded session (e.g. a refresh) — restart from the boot
   // dispatcher, preserving ?session= so it re-loads.
@@ -242,7 +244,7 @@ export function CandidateWelcomeScreen() {
       navigate(`/interview${location.search}`);
     } catch (e) {
       console.error('Failed to start interview:', e);
-      alert(
+      toast.error(
         'This interview link can no longer be used to start the interview. '
         + 'Please contact your HR or recruiter for a new link.'
       );

@@ -27,7 +27,6 @@ export async function readCandidateSessionFromURL({ onWaiting } = {}) {
     return { shortcode, session };
   } catch (e) {
     console.error('Failed to load session by code:', e);
-    alert(`This interview link could not be loaded.\n${e.message}`);
     return null;
   }
 }

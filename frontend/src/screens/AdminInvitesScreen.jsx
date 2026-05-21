@@ -10,6 +10,7 @@ import {
 } from '../api/client.js';
 import { useAuth } from '../providers/AuthProvider.jsx';
 import { copyToClipboard } from '../utils/clipboard.js';
+import { isValidEmail } from '../utils/validation.js';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -106,7 +107,7 @@ export function AdminInvitesScreen() {
     setNotice('');
     setResult(null);
     const trimmedEmail = email.trim();
-    if (!trimmedEmail.includes('@')) {
+    if (!isValidEmail(trimmedEmail)) {
       setError('Enter a valid email.');
       return;
     }

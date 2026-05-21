@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './providers/AuthProvider.jsx';
 import { AppStateProvider, useAppState } from './providers/AppStateProvider.jsx';
+import { ToastProvider, useToast } from './providers/ToastProvider.jsx';
 import { AppShell } from './components/AppShell.jsx';
 import { LoadingScreen } from './screens/LoadingScreen.jsx';
 import { LoginScreen } from './screens/LoginScreen.jsx';
@@ -28,6 +29,14 @@ function RequireAdmin({ children }) {
   return hasRole(['admin', 'super_admin']) ? children : <Navigate to="/setup" replace />;
 }
 
+function RequireCandidateLink({ children }) {
+  const { isAuthenticated: authed } = useAuth();
+  const [params] = useSearchParams();
+  const sessionCode = params.get('session') || '';
+
+  return authed || sessionCode ? children : <Navigate to="/login" replace />;
+}
+
 /// Boot dispatcher (replaces bootstrap.js). Reads the legacy query-param deep
 /// links once, then routes to the matching screen.
 function Boot() {
@@ -35,6 +44,7 @@ function Boot() {
   const location = useLocation();
   const [params] = useSearchParams();
   const { updateInterview } = useAppState();
+  const toast = useToast();
   const ranRef = useRef(false);
 
   const inviteToken = params.get('invite') || params.get('accept_invite') || params.get('token') || '';
@@ -77,6 +87,7 @@ function Boot() {
           navigate(`/welcome${location.search}`, { replace: true });
           ensureVoicesLoaded();
         } else {
+          toast.error('This interview link could not be loaded. Please check the link or ask HR for a new one.');
           navigate('/setup', { replace: true });
         }
         return;
@@ -99,20 +110,22 @@ export function App() {
   return (
     <AuthProvider>
       <AppStateProvider>
-        <AppShell>
-          <Routes>
-            <Route path="/" element={<Boot />} />
-            <Route path="/login" element={<LoginScreen />} />
-            <Route path="/accept-invite" element={<AcceptInviteScreen />} />
-            <Route path="/setup" element={<RequireAuth><SetupScreen /></RequireAuth>} />
-            <Route path="/invites" element={<RequireAdmin><AdminInvitesScreen /></RequireAdmin>} />
-            <Route path="/welcome" element={<CandidateWelcomeScreen />} />
-            <Route path="/interview" element={<InterviewScreen />} />
-            <Route path="/results" element={<ResultsScreen />} />
-            <Route path="/transcript" element={<TranscriptScreen />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AppShell>
+        <ToastProvider>
+          <AppShell>
+            <Routes>
+              <Route path="/" element={<Boot />} />
+              <Route path="/login" element={<LoginScreen />} />
+              <Route path="/accept-invite" element={<AcceptInviteScreen />} />
+              <Route path="/setup" element={<RequireAuth><SetupScreen /></RequireAuth>} />
+              <Route path="/invites" element={<RequireAdmin><AdminInvitesScreen /></RequireAdmin>} />
+              <Route path="/welcome" element={<RequireCandidateLink><CandidateWelcomeScreen /></RequireCandidateLink>} />
+              <Route path="/interview" element={<RequireCandidateLink><InterviewScreen /></RequireCandidateLink>} />
+              <Route path="/results" element={<RequireCandidateLink><ResultsScreen /></RequireCandidateLink>} />
+              <Route path="/transcript" element={<RequireCandidateLink><TranscriptScreen /></RequireCandidateLink>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </AppShell>
+        </ToastProvider>
       </AppStateProvider>
     </AuthProvider>
   );

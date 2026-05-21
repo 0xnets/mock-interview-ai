@@ -17,6 +17,7 @@ mod rate_limit;
 mod realtime;
 mod services;
 mod shortcode;
+mod validation;
 mod workers;
 
 #[tokio::main]

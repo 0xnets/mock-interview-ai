@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAppState } from '../providers/AppStateProvider.jsx';
+import { useToast } from '../providers/ToastProvider.jsx';
 import { isAuthenticated } from '../app/auth-store.js';
 import { openInterviewSocket, sendMsg, closeSocket } from '../realtime/ws-client.js';
 import { speak } from '../voice/speech-synthesis.js';
@@ -27,6 +28,7 @@ export function InterviewScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { interview, updateInterview } = useAppState();
+  const toast = useToast();
 
   // Mount snapshots of interview context — set once before this screen mounts.
   const candidateNameRef = useRef(interview.candidateName);
@@ -67,7 +69,7 @@ export function InterviewScreen() {
     },
     onError: (err) => {
       if (err === 'unsupported') {
-        alert("Your browser doesn't support speech recognition. Please use Chrome or Edge.");
+        toast.error("Your browser doesn't support speech recognition. Please use Chrome or Edge.");
       } else if (err === 'no-speech') {
         setMicStatus("Didn't catch that — click the mic and try again.");
       } else if (err === 'not-allowed') {
@@ -153,7 +155,7 @@ export function InterviewScreen() {
       updateInterview({ results, reportPdfUrl, reportPdfError });
       navigate(`/results${searchRef.current}`);
     } catch (e) {
-      alert('Failed to score interview: ' + e.message);
+      toast.error('Failed to score interview: ' + e.message);
       navigate('/setup');
     }
   }
@@ -175,7 +177,7 @@ export function InterviewScreen() {
         break;
       case 'error':
         console.error('Server error frame', msg);
-        alert(`Backend error: ${msg.message || msg.code || 'unknown'}`);
+        toast.error(`Backend error: ${msg.message || msg.code || 'unknown'}`);
         if (msg.terminal) {
           closeSocket(socketRef.current);
           socketRef.current = null;
@@ -234,7 +236,7 @@ export function InterviewScreen() {
 
   function handleSubmit() {
     const answer = (recog.finalTranscript + recog.interimTranscript).trim();
-    if (!answer) { alert('Please record an answer first.'); return; }
+    if (!answer) { toast.warning('Please record an answer first.'); return; }
     recog.stop();
 
     const ordinal = currentOrdinalRef.current;

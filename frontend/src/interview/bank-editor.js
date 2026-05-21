@@ -2,6 +2,11 @@
 /// same `## Section` + question-line text format that `parseNonTechBank` reads.
 import { parseNonTechBank } from './non-tech-bank.js';
 
+const MAX_BANK_SECTIONS = 20;
+const MAX_BANK_QUESTIONS = 400;
+const MAX_SECTION_CHARS = 80;
+const MAX_QUESTION_CHARS = 500;
+
 /// Parse for the editor: a legacy non-section bank (`_default`) is surfaced under
 /// a visible "Behavioral Questions" heading.
 export function parseBankForEditor(text) {
@@ -47,11 +52,29 @@ export function validateBank(text) {
   const stats = bankStats(text);
   const errors = [];
   const warnings = [];
+  const bank = parseBankForEditor(text);
 
   if (stats.emptySections > 0) {
     errors.push(`Add questions to ${stats.emptySections} empty section${stats.emptySections === 1 ? '' : 's'} or remove them.`);
   } else if (stats.totalQuestions === 0) {
     errors.push('Add at least one behavioral question.');
+  }
+  if (stats.sectionCount > MAX_BANK_SECTIONS) {
+    errors.push(`Use ${MAX_BANK_SECTIONS} behavioral sections or fewer.`);
+  }
+  if (stats.totalQuestions > MAX_BANK_QUESTIONS) {
+    errors.push(`Use ${MAX_BANK_QUESTIONS} behavioral questions or fewer.`);
+  }
+  for (const [section, questions] of Object.entries(bank)) {
+    if (section.length > MAX_SECTION_CHARS) {
+      errors.push(`Section "${section}" must be ${MAX_SECTION_CHARS} characters or fewer.`);
+      break;
+    }
+    const longQuestionIndex = questions.findIndex(question => question.length > MAX_QUESTION_CHARS);
+    if (longQuestionIndex !== -1) {
+      errors.push(`Question ${longQuestionIndex + 1} in "${section}" must be ${MAX_QUESTION_CHARS} characters or fewer.`);
+      break;
+    }
   }
   return { errors, warnings, stats };
 }

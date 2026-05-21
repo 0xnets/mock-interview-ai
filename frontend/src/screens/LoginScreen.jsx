@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { login } from '../api/client.js';
+import { isValidEmail } from '../utils/validation.js';
 
 export function LoginScreen() {
   const navigate = useNavigate();
@@ -14,6 +15,10 @@ export function LoginScreen() {
     setError('');
     if (!email || !password) {
       setError('Email and password are required.');
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setError('Enter a valid email.');
       return;
     }
     setBusy(true);
