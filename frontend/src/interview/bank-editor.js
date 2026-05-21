@@ -1,11 +1,12 @@
 /// Pure helpers for the HR behavioral-question-bank editor. They operate on the
 /// same `## Section` + question-line text format that `parseNonTechBank` reads.
 import { parseNonTechBank } from './non-tech-bank.js';
+import { envNumber } from '../app/env.js';
 
-const MAX_BANK_SECTIONS = 20;
-const MAX_BANK_QUESTIONS = 400;
-const MAX_SECTION_CHARS = 80;
-const MAX_QUESTION_CHARS = 500;
+const MAX_BANK_SECTIONS = envNumber('MAX_BANK_SECTIONS');
+const MAX_BANK_QUESTIONS = envNumber('MAX_BANK_QUESTIONS');
+const MAX_SECTION_CHARS = envNumber('MAX_BANK_SECTION_CHARS');
+const MAX_QUESTION_CHARS = envNumber('MAX_BANK_QUESTION_CHARS');
 
 /// Parse for the editor: a legacy non-section bank (`_default`) is surfaced under
 /// a visible "Behavioral Questions" heading.

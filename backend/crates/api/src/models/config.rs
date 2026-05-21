@@ -8,19 +8,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 
-use crate::validation::validate_email;
-
-const MIN_TECH_COUNT: u16 = 1;
-const MAX_TECH_COUNT: u16 = 20;
-const MAX_BEHAVIORAL_COUNT: u16 = 20;
-const MIN_PASS_THRESHOLD: i16 = 0;
-const MAX_PASS_THRESHOLD: i16 = 100;
-const MAX_BANK_SECTIONS: usize = 20;
-const MAX_BANK_QUESTIONS: usize = 400;
-const MAX_BANK_SECTION_CHARS: usize = 80;
-const MAX_BANK_QUESTION_CHARS: usize = 500;
-
-const DEFAULT_TECH_COUNT: u16 = 5;
+use crate::{config::defaults, validation::validate_email};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HrConfig {
@@ -46,7 +34,7 @@ impl HrConfig {
     pub fn defaults(default_pass_threshold: i16) -> Self {
         Self {
             hr_email: String::new(),
-            tech_count: DEFAULT_TECH_COUNT,
+            tech_count: defaults::DEFAULT_TECH_COUNT,
             behavioral_count: 0,
             behavioral_bank: json!({}),
             pass_threshold: default_pass_threshold,
@@ -56,11 +44,13 @@ impl HrConfig {
 
     /// Clamp numeric fields into their accepted ranges.
     pub fn normalized(mut self) -> Self {
-        self.tech_count = self.tech_count.clamp(MIN_TECH_COUNT, MAX_TECH_COUNT);
-        self.behavioral_count = self.behavioral_count.min(MAX_BEHAVIORAL_COUNT);
+        self.tech_count = self
+            .tech_count
+            .clamp(defaults::MIN_TECH_COUNT, defaults::MAX_TECH_COUNT);
+        self.behavioral_count = self.behavioral_count.min(defaults::MAX_BEHAVIORAL_COUNT);
         self.pass_threshold = self
             .pass_threshold
-            .clamp(MIN_PASS_THRESHOLD, MAX_PASS_THRESHOLD);
+            .clamp(defaults::MIN_PASS_THRESHOLD, defaults::MAX_PASS_THRESHOLD);
         self
     }
 
@@ -98,14 +88,16 @@ fn validate_behavioral_bank(bank: &JsonValue) -> Result<BankStats, String> {
     if stats.populated_sections == 0 {
         return Err("behavioral_bank must include at least one populated section".into());
     }
-    if stats.populated_sections > MAX_BANK_SECTIONS {
+    if stats.populated_sections > defaults::MAX_BANK_SECTIONS {
         return Err(format!(
-            "behavioral_bank has too many sections; max is {MAX_BANK_SECTIONS}"
+            "behavioral_bank has too many sections; max is {}",
+            defaults::MAX_BANK_SECTIONS
         ));
     }
-    if stats.total_questions > MAX_BANK_QUESTIONS {
+    if stats.total_questions > defaults::MAX_BANK_QUESTIONS {
         return Err(format!(
-            "behavioral_bank has too many questions; max is {MAX_BANK_QUESTIONS}"
+            "behavioral_bank has too many questions; max is {}",
+            defaults::MAX_BANK_QUESTIONS
         ));
     }
     Ok(stats)
@@ -150,9 +142,10 @@ fn validate_section_name(section: &str) -> Result<(), String> {
     if section.is_empty() {
         return Err("behavioral_bank section names cannot be empty".into());
     }
-    if section.chars().count() > MAX_BANK_SECTION_CHARS {
+    if section.chars().count() > defaults::MAX_BANK_SECTION_CHARS {
         return Err(format!(
-            "behavioral_bank section '{section}' exceeds {MAX_BANK_SECTION_CHARS} characters"
+            "behavioral_bank section '{section}' exceeds {} characters",
+            defaults::MAX_BANK_SECTION_CHARS
         ));
     }
     if section.chars().any(|c| c.is_control()) {
@@ -189,10 +182,11 @@ fn validate_questions(
                 idx + 1
             ));
         }
-        if trimmed.chars().count() > MAX_BANK_QUESTION_CHARS {
+        if trimmed.chars().count() > defaults::MAX_BANK_QUESTION_CHARS {
             return Err(format!(
-                "behavioral_bank section '{section}' question {} exceeds {MAX_BANK_QUESTION_CHARS} characters",
-                idx + 1
+                "behavioral_bank section '{section}' question {} exceeds {} characters",
+                idx + 1,
+                defaults::MAX_BANK_QUESTION_CHARS
             ));
         }
         if trimmed

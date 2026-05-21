@@ -4,11 +4,12 @@ import { useToast } from '../providers/ToastProvider.jsx';
 import { createInterview } from '../api/client.js';
 import { PdfTextarea } from './PdfTextarea.jsx';
 import { copyToClipboard } from '../utils/clipboard.js';
+import { envNumber } from '../app/env.js';
 
-const MAX_CANDIDATE_NAME_CHARS = 120;
-const MAX_ROLE_TITLE_CHARS = 160;
-const MIN_JD_WORDS = 20;
-const MIN_RESUME_WORDS = 30;
+const MAX_CANDIDATE_NAME_CHARS = envNumber('MAX_CANDIDATE_NAME_CHARS');
+const MAX_ROLE_TITLE_CHARS = envNumber('MAX_ROLE_TITLE_CHARS');
+const MIN_JD_WORDS = envNumber('MIN_JD_WORDS');
+const MIN_RESUME_WORDS = envNumber('MIN_RESUME_WORDS');
 
 function wordCount(text) {
   return text.split(/\s+/).filter(word => /[A-Za-z]/.test(word)).length;
@@ -94,7 +95,7 @@ export function GenerateLinkTab() {
   async function handleCopy() {
     const ok = await copyToClipboard(linkRef.current);
     setCopyLabel(ok ? '✓ Copied!' : 'Copy failed');
-    setTimeout(() => setCopyLabel('📋 Copy URL'), 2000);
+    setTimeout(() => setCopyLabel('📋 Copy URL'), envNumber('COPY_FEEDBACK_RESET_MS'));
   }
 
   return (

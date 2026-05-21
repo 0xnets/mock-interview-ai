@@ -1,4 +1,4 @@
-import { ENV } from '../app/env.js';
+import { ENV, envNumber } from '../app/env.js';
 import {
   getAccessToken,
   setSession,
@@ -270,7 +270,14 @@ export async function fetchSessionByCode(code) {
 }
 
 /// Poll the session-by-code endpoint until priming flips state from `pending`.
-export async function waitForPrimed(code, { onTick, intervalMs = 1500, timeoutMs = 90_000 } = {}) {
+export async function waitForPrimed(
+  code,
+  {
+    onTick,
+    intervalMs = envNumber('SESSION_PRIMING_POLL_INTERVAL_MS'),
+    timeoutMs = envNumber('SESSION_PRIMING_TIMEOUT_MS'),
+  } = {},
+) {
   const started = Date.now();
   let attempt = 0;
   while (true) {

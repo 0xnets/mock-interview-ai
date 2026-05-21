@@ -5,7 +5,7 @@
 //! - [`defaults`] — every default value as a centralized typed constant.
 //! - [`validation`] — post-load validation hook.
 
-mod defaults;
+pub mod defaults;
 mod env;
 mod types;
 mod validation;

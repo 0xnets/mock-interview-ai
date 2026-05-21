@@ -18,6 +18,7 @@ use uuid::Uuid;
 use crate::{
     app::AppState,
     auth::HrPrincipal,
+    config::defaults::{MAX_JD_BYTES, MAX_RESUME_BYTES},
     error::{ApiError, ApiResult},
     models::config::HrConfig,
     models::interviews::{
@@ -30,9 +31,6 @@ use crate::{
         MAX_ROLE_TITLE_CHARS, MIN_JD_WORDS, MIN_RESUME_WORDS,
     },
 };
-
-const MAX_JD_BYTES: usize = 64 * 1024;
-const MAX_RESUME_BYTES: usize = 256 * 1024;
 
 pub async fn create(
     State(state): State<AppState>,

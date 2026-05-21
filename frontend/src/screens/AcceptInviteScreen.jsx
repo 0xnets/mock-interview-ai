@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { acceptInvite } from '../api/client.js';
+import { envNumber } from '../app/env.js';
+
+const MIN_INVITE_PASSWORD_CHARS = envNumber('MIN_INVITE_PASSWORD_CHARS');
 
 /// Read invite tokens from current and older invite-link query params.
 function tokenFromParams(params) {
@@ -27,8 +30,8 @@ export function AcceptInviteScreen() {
       setError('Enter the invite token from your email.');
       return;
     }
-    if (password.length < 12) {
-      setError('Password must be at least 12 characters.');
+    if (password.length < MIN_INVITE_PASSWORD_CHARS) {
+      setError(`Password must be at least ${MIN_INVITE_PASSWORD_CHARS} characters.`);
       return;
     }
     if (password !== confirmPassword) {
@@ -41,7 +44,10 @@ export function AcceptInviteScreen() {
       setSuccess(true);
       setPassword('');
       setConfirmPassword('');
-      setTimeout(() => navigate('/login', { state: { email: resp?.email } }), 1200);
+      setTimeout(
+        () => navigate('/login', { state: { email: resp?.email } }),
+        envNumber('ACCEPT_INVITE_REDIRECT_DELAY_MS'),
+      );
     } catch (e) {
       setError(e.message || 'Failed to accept invite.');
     } finally {
@@ -74,7 +80,7 @@ export function AcceptInviteScreen() {
           value={password}
           onChange={e => setPassword(e.target.value)}
         />
-        <p className="text-xs text-gray-500 mt-1">Minimum 12 characters.</p>
+        <p className="text-xs text-gray-500 mt-1">Minimum {MIN_INVITE_PASSWORD_CHARS} characters.</p>
       </div>
       <div className="mb-4">
         <label className="block text-sm font-semibold mb-2">Confirm Password</label>

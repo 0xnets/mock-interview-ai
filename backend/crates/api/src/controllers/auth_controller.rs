@@ -25,6 +25,7 @@ use uuid::Uuid;
 use crate::{
     app::AppState,
     auth::{hash_password, mint_refresh_token, role_at_least, verify_password, Principal},
+    config::defaults::MIN_INVITE_PASSWORD_CHARS,
     error::{ApiError, ApiResult},
     models::auth::{
         AcceptInviteRequest, CreateInviteRequest, CreateInviteResponse, InviteListItem,
@@ -192,8 +193,10 @@ pub async fn accept_invite(
     State(state): State<AppState>,
     Json(body): Json<AcceptInviteRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    if body.password.len() < 12 {
-        return Err(ApiError::BadRequest("password must be >= 12 chars".into()));
+    if body.password.len() < MIN_INVITE_PASSWORD_CHARS {
+        return Err(ApiError::BadRequest(format!(
+            "password must be >= {MIN_INVITE_PASSWORD_CHARS} chars"
+        )));
     }
     let invite = repo_auth::consume_invite(&state.pools.primary, &body.token)
         .await

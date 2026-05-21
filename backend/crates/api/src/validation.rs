@@ -1,7 +1,6 @@
-pub const MAX_CANDIDATE_NAME_CHARS: usize = 120;
-pub const MAX_ROLE_TITLE_CHARS: usize = 160;
-pub const MIN_JD_WORDS: usize = 20;
-pub const MIN_RESUME_WORDS: usize = 30;
+pub use crate::config::defaults::{
+    MAX_CANDIDATE_NAME_CHARS, MAX_ROLE_TITLE_CHARS, MIN_JD_WORDS, MIN_RESUME_WORDS,
+};
 
 pub fn validate_email(value: &str, field: &str) -> Result<(), String> {
     let email = value.trim();

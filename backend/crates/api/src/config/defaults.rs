@@ -13,6 +13,27 @@ pub const WEB_BASE_URL: &str = "http://localhost:4173";
 pub const SESSION_TTL_HOURS: i64 = 72;
 pub const DEFAULT_PASS_THRESHOLD: i16 = 70;
 
+// ─── Validation policy ─────────────────────────────────────────────────────
+pub const MAX_CANDIDATE_NAME_CHARS: usize = 120;
+pub const MAX_ROLE_TITLE_CHARS: usize = 160;
+pub const MIN_JD_WORDS: usize = 20;
+pub const MIN_RESUME_WORDS: usize = 30;
+pub const MAX_JD_BYTES: usize = 64 * 1024;
+pub const MAX_RESUME_BYTES: usize = 256 * 1024;
+pub const MIN_INVITE_PASSWORD_CHARS: usize = 12;
+
+// ─── HR configuration policy ───────────────────────────────────────────────
+pub const MIN_TECH_COUNT: u16 = 1;
+pub const MAX_TECH_COUNT: u16 = 20;
+pub const MAX_BEHAVIORAL_COUNT: u16 = 20;
+pub const MIN_PASS_THRESHOLD: i16 = 0;
+pub const MAX_PASS_THRESHOLD: i16 = 100;
+pub const MAX_BANK_SECTIONS: usize = 20;
+pub const MAX_BANK_QUESTIONS: usize = 400;
+pub const MAX_BANK_SECTION_CHARS: usize = 80;
+pub const MAX_BANK_QUESTION_CHARS: usize = 500;
+pub const DEFAULT_TECH_COUNT: u16 = 5;
+
 /// Failed pre-interview system checks a candidate may rack up before the
 /// interview link is expired and they are sent to HR for a new one.
 pub const SHORTLINK_INCOMPAT_LIMIT: i32 = 5;

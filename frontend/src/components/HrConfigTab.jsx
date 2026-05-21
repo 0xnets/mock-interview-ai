@@ -3,7 +3,7 @@ import { useAppState } from '../providers/AppStateProvider.jsx';
 import { useToast } from '../providers/ToastProvider.jsx';
 import { useVoices } from '../hooks/useVoices.js';
 import { testVoice } from '../voice/speech-synthesis.js';
-import { envNumber } from '../app/env.js';
+import { ENV, envNumber } from '../app/env.js';
 import { isValidEmail } from '../utils/validation.js';
 import {
   parseBankForEditor,
@@ -17,7 +17,7 @@ import {
   renameSectionInBank,
 } from '../interview/bank-editor.js';
 
-const DEFAULT_NON_TECH_SECTION = 'Role Fit & Work Preferences';
+const DEFAULT_NON_TECH_SECTION = ENV.DEFAULT_NON_TECH_SECTION;
 
 export function HrConfigTab() {
   const { config, configStatus, hasSavedConfig, saveConfig } = useAppState();
@@ -120,7 +120,7 @@ export function HrConfigTab() {
         voiceName: selectValue,
       });
       setSaveStatus(true);
-      setTimeout(() => setSaveStatus(false), 2500);
+      setTimeout(() => setSaveStatus(false), envNumber('CONFIG_SAVE_STATUS_MS'));
       setEditorVisible(false);
     } catch (e) {
       toast.error(`Failed to save configuration: ${e.message}`);
@@ -144,7 +144,7 @@ export function HrConfigTab() {
     setSectionInput('');
     setQuestionsText((parseBankForEditor(nextBank)[canonical] || []).join('\n'));
     setAddStatus(true);
-    setTimeout(() => setAddStatus(false), 2500);
+    setTimeout(() => setAddStatus(false), envNumber('CONFIG_ADD_STATUS_MS'));
   }
 
   function selectSection(section) {

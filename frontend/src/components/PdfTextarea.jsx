@@ -45,7 +45,7 @@ export function PdfTextarea({ label, value, onChange, rows = 6, placeholder, cla
         <label className="block text-sm font-semibold">{label}</label>
         <label className="text-xs text-indigo-600 cursor-pointer hover:underline">
           📄 Upload PDF
-          <input type="file" accept="application/pdf" className="hidden" onChange={handleFile} />
+          <input type="file" accept={ENV.PDF_ACCEPTED_MIME_TYPE} className="hidden" onChange={handleFile} />
         </label>
       </div>
       <textarea
