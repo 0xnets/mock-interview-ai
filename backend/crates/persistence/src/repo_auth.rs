@@ -104,6 +104,17 @@ pub async fn set_password_hash(
     Ok(())
 }
 
+pub async fn disable_account(pool: &PgPool, account_id: Uuid) -> Result<(), DbError> {
+    let result = sqlx::query("UPDATE accounts SET status = 'disabled' WHERE id = $1")
+        .bind(account_id)
+        .execute(pool)
+        .await?;
+    if result.rows_affected() == 0 {
+        return Err(DbError::NotFound);
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub struct NewAccount {
     pub email: String,
@@ -283,7 +294,14 @@ pub async fn consume_invite(pool: &PgPool, raw_token: &str) -> Result<InviteRow,
         SET consumed_at = now()
         WHERE token_hash = $1
           AND consumed_at IS NULL
+          AND revoked_at IS NULL
           AND expires_at > now()
+          AND EXISTS (
+              SELECT 1
+              FROM accounts a
+              WHERE a.id = account_invites.account_id
+                AND a.status <> 'disabled'
+          )
         RETURNING account_id, expires_at, consumed_at
         "#,
     )
@@ -296,4 +314,208 @@ pub async fn consume_invite(pool: &PgPool, raw_token: &str) -> Result<InviteRow,
         expires_at: row.1,
         consumed_at: row.2,
     })
+}
+
+#[derive(Debug, Clone)]
+pub struct InviteDetail {
+    pub id: Uuid,
+    pub account_id: Uuid,
+    pub email: String,
+    pub display_name: Option<String>,
+    pub role: String,
+    pub account_status: String,
+    pub invited_by: Uuid,
+    pub invited_by_email: Option<String>,
+    pub expires_at: DateTime<Utc>,
+    pub consumed_at: Option<DateTime<Utc>>,
+    pub revoked_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub status: String,
+}
+
+type InviteDetailRow = (
+    Uuid,
+    Uuid,
+    String,
+    Option<String>,
+    String,
+    String,
+    Uuid,
+    Option<String>,
+    DateTime<Utc>,
+    Option<DateTime<Utc>>,
+    Option<DateTime<Utc>>,
+    DateTime<Utc>,
+    String,
+);
+
+fn invite_detail_from_row(row: InviteDetailRow) -> InviteDetail {
+    InviteDetail {
+        id: row.0,
+        account_id: row.1,
+        email: row.2,
+        display_name: row.3,
+        role: row.4,
+        account_status: row.5,
+        invited_by: row.6,
+        invited_by_email: row.7,
+        expires_at: row.8,
+        consumed_at: row.9,
+        revoked_at: row.10,
+        created_at: row.11,
+        status: row.12,
+    }
+}
+
+pub async fn list_invites(
+    pool: &PgPool,
+    status: Option<&str>,
+) -> Result<Vec<InviteDetail>, DbError> {
+    let rows: Vec<InviteDetailRow> = sqlx::query_as(
+        r#"
+        SELECT
+            i.id,
+            a.id AS account_id,
+            a.email::text,
+            a.display_name,
+            a.role,
+            a.status,
+            i.invited_by,
+            inviter.email::text AS invited_by_email,
+            i.expires_at,
+            i.consumed_at,
+            i.revoked_at,
+            i.created_at,
+            CASE
+                WHEN i.consumed_at IS NOT NULL THEN 'accepted'
+                WHEN i.revoked_at IS NOT NULL THEN 'revoked'
+                WHEN i.expires_at <= now() THEN 'expired'
+                ELSE 'active'
+            END AS invite_status
+        FROM account_invites i
+        JOIN accounts a ON a.id = i.account_id
+        LEFT JOIN accounts inviter ON inviter.id = i.invited_by
+        WHERE $1::text IS NULL
+           OR $1::text = 'all'
+           OR $1::text = CASE
+                WHEN i.consumed_at IS NOT NULL THEN 'accepted'
+                WHEN i.revoked_at IS NOT NULL THEN 'revoked'
+                WHEN i.expires_at <= now() THEN 'expired'
+                ELSE 'active'
+            END
+        ORDER BY i.created_at DESC
+        "#,
+    )
+    .bind(status)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(invite_detail_from_row).collect())
+}
+
+pub async fn find_invite(pool: &PgPool, invite_id: Uuid) -> Result<InviteDetail, DbError> {
+    let row: Option<InviteDetailRow> = sqlx::query_as(
+        r#"
+        SELECT
+            i.id,
+            a.id AS account_id,
+            a.email::text,
+            a.display_name,
+            a.role,
+            a.status,
+            i.invited_by,
+            inviter.email::text AS invited_by_email,
+            i.expires_at,
+            i.consumed_at,
+            i.revoked_at,
+            i.created_at,
+            CASE
+                WHEN i.consumed_at IS NOT NULL THEN 'accepted'
+                WHEN i.revoked_at IS NOT NULL THEN 'revoked'
+                WHEN i.expires_at <= now() THEN 'expired'
+                ELSE 'active'
+            END AS invite_status
+        FROM account_invites i
+        JOIN accounts a ON a.id = i.account_id
+        LEFT JOIN accounts inviter ON inviter.id = i.invited_by
+        WHERE i.id = $1
+        "#,
+    )
+    .bind(invite_id)
+    .fetch_optional(pool)
+    .await?;
+
+    row.map(invite_detail_from_row).ok_or(DbError::NotFound)
+}
+
+pub async fn revoke_invite(
+    pool: &PgPool,
+    invite_id: Uuid,
+    revoked_by: Uuid,
+) -> Result<(), DbError> {
+    let result = sqlx::query(
+        r#"
+        UPDATE account_invites
+        SET revoked_at = now(), revoked_by = $2
+        WHERE id = $1
+          AND consumed_at IS NULL
+          AND revoked_at IS NULL
+          AND expires_at > now()
+        "#,
+    )
+    .bind(invite_id)
+    .bind(revoked_by)
+    .execute(pool)
+    .await?;
+    if result.rows_affected() == 0 {
+        return Err(DbError::NotFound);
+    }
+    Ok(())
+}
+
+pub async fn undo_revoke_invite(pool: &PgPool, invite_id: Uuid) -> Result<(), DbError> {
+    let result = sqlx::query(
+        r#"
+        UPDATE account_invites
+        SET revoked_at = NULL, revoked_by = NULL
+        WHERE id = $1
+          AND consumed_at IS NULL
+          AND revoked_at IS NOT NULL
+          AND expires_at > now()
+          AND EXISTS (
+              SELECT 1
+              FROM accounts a
+              WHERE a.id = account_invites.account_id
+                AND a.status <> 'disabled'
+          )
+        "#,
+    )
+    .bind(invite_id)
+    .execute(pool)
+    .await?;
+    if result.rows_affected() == 0 {
+        return Err(DbError::NotFound);
+    }
+    Ok(())
+}
+
+pub async fn revoke_pending_invites_for_account(
+    pool: &PgPool,
+    account_id: Uuid,
+    revoked_by: Uuid,
+) -> Result<(), DbError> {
+    sqlx::query(
+        r#"
+        UPDATE account_invites
+        SET revoked_at = COALESCE(revoked_at, now()), revoked_by = COALESCE(revoked_by, $2)
+        WHERE account_id = $1
+          AND consumed_at IS NULL
+          AND expires_at > now()
+        "#,
+    )
+    .bind(account_id)
+    .bind(revoked_by)
+    .execute(pool)
+    .await?;
+    Ok(())
 }

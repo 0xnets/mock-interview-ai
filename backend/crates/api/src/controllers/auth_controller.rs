@@ -11,7 +11,7 @@
 //! frontend stashes them in memory (never localStorage).
 
 use axum::{
-    extract::State,
+    extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
@@ -24,9 +24,12 @@ use uuid::Uuid;
 
 use crate::{
     app::AppState,
-    auth::{hash_password, mint_refresh_token, verify_password, Principal},
+    auth::{hash_password, mint_refresh_token, role_at_least, verify_password, Principal},
     error::{ApiError, ApiResult},
-    models::auth::{AcceptInviteRequest, CreateInviteRequest, CreateInviteResponse, LoginRequest},
+    models::auth::{
+        AcceptInviteRequest, CreateInviteRequest, CreateInviteResponse, InviteListItem,
+        InviteListResponse, ListInvitesQuery, LoginRequest,
+    },
     services::auth_session::{self, REFRESH_COOKIE},
 };
 
@@ -221,6 +224,9 @@ pub async fn create_invite(
     if !matches!(body.role.as_str(), "hr" | "admin") {
         return Err(ApiError::BadRequest("role must be hr or admin".into()));
     }
+    if body.role == "admin" && principal.role != "super_admin" {
+        return Err(ApiError::Unauthorized);
+    }
     let account_id = repo_auth::create_invited_account(
         &state.pools.primary,
         repo_auth::NewAccount {
@@ -265,4 +271,243 @@ pub async fn create_invite(
         accept_url,
         expires_in_hours: ttl_hours,
     }))
+}
+
+// ─── admin: invite management ───────────────────────────────────────────────
+
+pub async fn list_invites(
+    State(state): State<AppState>,
+    Query(query): Query<ListInvitesQuery>,
+) -> ApiResult<Json<InviteListResponse>> {
+    let status = normalized_invite_status(query.status.as_deref())?;
+    let invites = repo_auth::list_invites(&state.pools.read, status)
+        .await?
+        .into_iter()
+        .map(invite_item_from_detail)
+        .collect();
+    Ok(Json(InviteListResponse { invites }))
+}
+
+pub async fn revoke_invite(
+    State(state): State<AppState>,
+    principal: Principal,
+    Path(invite_id): Path<Uuid>,
+) -> ApiResult<impl IntoResponse> {
+    let invite = repo_auth::find_invite(&state.pools.read, invite_id).await?;
+    ensure_can_manage_role(&principal, &invite.role)?;
+    if invite.status != "active" {
+        return Err(ApiError::BadRequest(
+            "only active pending invites can be revoked".into(),
+        ));
+    }
+    repo_auth::revoke_invite(&state.pools.primary, invite_id, principal.account_id).await?;
+    let _ = repo_audit::write(
+        &state.pools.primary,
+        Some(principal.account_id),
+        None,
+        "auth.invite_revoked",
+        Some(principal.event_id),
+        json!({ "invite_id": invite_id, "account_id": invite.account_id, "role": invite.role }),
+    )
+    .await;
+    Ok((StatusCode::NO_CONTENT, ()).into_response())
+}
+
+pub async fn undo_revoke_invite(
+    State(state): State<AppState>,
+    principal: Principal,
+    Path(invite_id): Path<Uuid>,
+) -> ApiResult<impl IntoResponse> {
+    let invite = repo_auth::find_invite(&state.pools.read, invite_id).await?;
+    ensure_can_manage_role(&principal, &invite.role)?;
+    if invite.status != "revoked" {
+        return Err(ApiError::BadRequest(
+            "only revoked pending invites can be restored".into(),
+        ));
+    }
+    if invite.account_status == "disabled" {
+        return Err(ApiError::BadRequest(
+            "disabled accounts cannot have invites restored".into(),
+        ));
+    }
+    repo_auth::undo_revoke_invite(&state.pools.primary, invite_id).await?;
+    let _ = repo_audit::write(
+        &state.pools.primary,
+        Some(principal.account_id),
+        None,
+        "auth.invite_revoke_undone",
+        Some(principal.event_id),
+        json!({ "invite_id": invite_id, "account_id": invite.account_id, "role": invite.role }),
+    )
+    .await;
+    Ok((StatusCode::NO_CONTENT, ()).into_response())
+}
+
+pub async fn resend_invite(
+    State(state): State<AppState>,
+    principal: Principal,
+    Path(invite_id): Path<Uuid>,
+) -> ApiResult<Json<CreateInviteResponse>> {
+    let invite = repo_auth::find_invite(&state.pools.read, invite_id).await?;
+    ensure_can_manage_role(&principal, &invite.role)?;
+    if invite.status == "accepted" {
+        return Err(ApiError::BadRequest(
+            "accepted invites cannot be resent".into(),
+        ));
+    }
+    if invite.account_status == "disabled" {
+        return Err(ApiError::BadRequest(
+            "disabled accounts cannot receive invites".into(),
+        ));
+    }
+
+    repo_auth::revoke_pending_invites_for_account(
+        &state.pools.primary,
+        invite.account_id,
+        principal.account_id,
+    )
+    .await?;
+
+    let token = mint_refresh_token();
+    let ttl_hours = state.cfg.invite_ttl_hours;
+    repo_auth::create_invite(
+        &state.pools.primary,
+        &token,
+        invite.account_id,
+        principal.account_id,
+        Duration::hours(ttl_hours),
+    )
+    .await?;
+
+    let accept_url = format!(
+        "{}/?invite={}",
+        state.cfg.web_base_url.trim_end_matches('/'),
+        token
+    );
+
+    let _ = repo_audit::write(
+        &state.pools.primary,
+        Some(principal.account_id),
+        None,
+        "auth.invite_resent",
+        Some(principal.event_id),
+        json!({ "source_invite_id": invite_id, "account_id": invite.account_id, "role": invite.role }),
+    )
+    .await;
+
+    Ok(Json(CreateInviteResponse {
+        account_id: invite.account_id,
+        token,
+        accept_url,
+        expires_in_hours: ttl_hours,
+    }))
+}
+
+pub async fn disable_account(
+    State(state): State<AppState>,
+    principal: Principal,
+    Path(account_id): Path<Uuid>,
+) -> ApiResult<impl IntoResponse> {
+    if account_id == principal.account_id {
+        return Err(ApiError::BadRequest(
+            "you cannot disable your own account".into(),
+        ));
+    }
+
+    let account = repo_auth::find_account_by_id(&state.pools.read, account_id).await?;
+    ensure_can_manage_role(&principal, &account.role)?;
+    if account.status == "disabled" {
+        return Ok((StatusCode::NO_CONTENT, ()).into_response());
+    }
+
+    repo_auth::disable_account(&state.pools.primary, account_id).await?;
+    repo_auth::revoke_all_for_account(&state.pools.primary, account_id).await?;
+    let _ = repo_audit::write(
+        &state.pools.primary,
+        Some(principal.account_id),
+        None,
+        "auth.account_disabled",
+        Some(principal.event_id),
+        json!({ "account_id": account_id, "role": account.role }),
+    )
+    .await;
+
+    Ok((StatusCode::NO_CONTENT, ()).into_response())
+}
+
+fn normalized_invite_status(status: Option<&str>) -> ApiResult<Option<&str>> {
+    let Some(status) = status else {
+        return Ok(None);
+    };
+    let status = status.trim();
+    if status.is_empty() || status == "all" {
+        return Ok(None);
+    }
+    if matches!(status, "active" | "expired" | "accepted" | "revoked") {
+        return Ok(Some(status));
+    }
+    Err(ApiError::BadRequest("invalid invite status filter".into()))
+}
+
+fn ensure_can_manage_role(principal: &Principal, target_role: &str) -> ApiResult<()> {
+    match target_role {
+        "hr" if role_at_least(&principal.role, "admin") => Ok(()),
+        "admin" if principal.role == "super_admin" => Ok(()),
+        _ => Err(ApiError::Unauthorized),
+    }
+}
+
+fn invite_item_from_detail(invite: repo_auth::InviteDetail) -> InviteListItem {
+    InviteListItem {
+        id: invite.id,
+        account_id: invite.account_id,
+        email: invite.email,
+        display_name: invite.display_name,
+        role: invite.role,
+        account_status: invite.account_status,
+        invited_by: invite.invited_by,
+        invited_by_email: invite.invited_by_email,
+        status: invite.status,
+        expires_at: invite.expires_at,
+        consumed_at: invite.consumed_at,
+        revoked_at: invite.revoked_at,
+        created_at: invite.created_at,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn principal(role: &str) -> Principal {
+        Principal {
+            account_id: Uuid::new_v4(),
+            role: role.to_string(),
+            event_id: Uuid::new_v4(),
+        }
+    }
+
+    #[test]
+    fn admin_can_manage_hr_but_not_admin() {
+        let admin = principal("admin");
+        assert!(ensure_can_manage_role(&admin, "hr").is_ok());
+        assert!(ensure_can_manage_role(&admin, "admin").is_err());
+    }
+
+    #[test]
+    fn super_admin_can_manage_admin_and_hr() {
+        let super_admin = principal("super_admin");
+        assert!(ensure_can_manage_role(&super_admin, "hr").is_ok());
+        assert!(ensure_can_manage_role(&super_admin, "admin").is_ok());
+    }
+
+    #[test]
+    fn only_known_invite_status_filters_are_accepted() {
+        assert_eq!(
+            normalized_invite_status(Some("active")).unwrap(),
+            Some("active")
+        );
+        assert_eq!(normalized_invite_status(Some("all")).unwrap(), None);
+        assert!(normalized_invite_status(Some("pending")).is_err());
+    }
 }

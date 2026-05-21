@@ -8,7 +8,7 @@ export function AppShell({ children }) {
   const { isAuthenticated, principal, hasRole } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const isAdmin = hasRole(['admin', 'super_admin']);
+  const showInvitesButton = pathname === '/setup' && hasRole(['admin', 'super_admin']);
 
   async function handleLogout() {
     try { await logout(); } catch { /* logout() clears the session in its finally */ }
@@ -28,7 +28,7 @@ export function AppShell({ children }) {
               <span className="text-xs text-gray-600">
                 {principal && `${principal.display_name || principal.account_id} (${principal.role})`}
               </span>
-              {isAdmin && (
+              {showInvitesButton && (
                 <button
                   className={`btn-secondary text-sm ${pathname === '/invites' ? 'is-active' : ''}`}
                   aria-pressed={pathname === '/invites'}

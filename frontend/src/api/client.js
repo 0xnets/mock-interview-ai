@@ -10,6 +10,7 @@ import {
 /** @typedef {import('./types.js').RefreshResponse} RefreshResponse */
 /** @typedef {import('./types.js').InviteCreateRequest} InviteCreateRequest */
 /** @typedef {import('./types.js').InviteCreateResponse} InviteCreateResponse */
+/** @typedef {import('./types.js').InviteListResponse} InviteListResponse */
 /** @typedef {import('./types.js').AcceptInviteRequest} AcceptInviteRequest */
 /** @typedef {import('./types.js').TranscriptExport} TranscriptExport */
 
@@ -164,6 +165,41 @@ export async function createInvite(req) {
   return apiFetch('/v1/admin/invites', {
     method: 'POST',
     body: req,
+    auth: 'required',
+  });
+}
+
+/** @param {string} [status] @returns {Promise<InviteListResponse>} */
+export async function listInvites(status = 'all') {
+  const qs = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
+  return apiFetch(`/v1/admin/invites${qs}`, { auth: 'required' });
+}
+
+export async function revokeInvite(inviteId) {
+  return apiFetch(`/v1/admin/invites/${encodeURIComponent(inviteId)}/revoke`, {
+    method: 'POST',
+    auth: 'required',
+  });
+}
+
+export async function undoRevokeInvite(inviteId) {
+  return apiFetch(`/v1/admin/invites/${encodeURIComponent(inviteId)}/undo-revoke`, {
+    method: 'POST',
+    auth: 'required',
+  });
+}
+
+/** @returns {Promise<InviteCreateResponse>} */
+export async function resendInvite(inviteId) {
+  return apiFetch(`/v1/admin/invites/${encodeURIComponent(inviteId)}/resend`, {
+    method: 'POST',
+    auth: 'required',
+  });
+}
+
+export async function disableAccount(accountId) {
+  return apiFetch(`/v1/admin/accounts/${encodeURIComponent(accountId)}/disable`, {
+    method: 'POST',
     auth: 'required',
   });
 }

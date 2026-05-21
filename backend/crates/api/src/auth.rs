@@ -23,6 +23,8 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation}
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use persistence::repo_auth;
+
 use crate::{app::AppState, error::ApiError};
 
 /// JWT subject/role/scope payload. We deliberately keep this small — anything
@@ -183,9 +185,15 @@ async fn authenticate(state: &AppState, headers: &HeaderMap) -> Result<Principal
             if let Ok(claims) = keys.verify_access(&raw) {
                 let account_id: Uuid = claims.sub.parse().map_err(|_| ApiError::Unauthorized)?;
                 let event_id: Uuid = claims.sid.parse().unwrap_or_else(|_| Uuid::new_v4());
+                let account = repo_auth::find_account_by_id(&state.pools.read, account_id)
+                    .await
+                    .map_err(|_| ApiError::Unauthorized)?;
+                if account.status != "active" {
+                    return Err(ApiError::Unauthorized);
+                }
                 return Ok(Principal {
                     account_id,
-                    role: claims.role,
+                    role: account.role,
                     event_id,
                 });
             }

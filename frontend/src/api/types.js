@@ -40,6 +40,32 @@
  */
 
 /**
+ * @typedef {'active'|'expired'|'accepted'|'revoked'} InviteStatus
+ */
+
+/**
+ * @typedef {Object} InviteListItem
+ * @property {string} id
+ * @property {string} account_id
+ * @property {string} email
+ * @property {string|null} display_name
+ * @property {Role} role
+ * @property {'invited'|'active'|'disabled'} account_status
+ * @property {string} invited_by
+ * @property {string|null} invited_by_email
+ * @property {InviteStatus} status
+ * @property {string} expires_at
+ * @property {string|null} consumed_at
+ * @property {string|null} revoked_at
+ * @property {string} created_at
+ */
+
+/**
+ * @typedef {Object} InviteListResponse
+ * @property {InviteListItem[]} invites
+ */
+
+/**
  * @typedef {Object} AcceptInviteRequest
  * @property {string} token
  * @property {string} password  Min 12 chars (backend rule).

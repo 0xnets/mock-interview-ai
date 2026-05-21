@@ -84,7 +84,24 @@ pub fn router(state: AppState) -> Router {
     let admin_protected = Router::new()
         .route(
             "/v1/admin/invites",
-            post(controllers::auth_controller::create_invite),
+            get(controllers::auth_controller::list_invites)
+                .post(controllers::auth_controller::create_invite),
+        )
+        .route(
+            "/v1/admin/invites/{invite_id}/revoke",
+            post(controllers::auth_controller::revoke_invite),
+        )
+        .route(
+            "/v1/admin/invites/{invite_id}/undo-revoke",
+            post(controllers::auth_controller::undo_revoke_invite),
+        )
+        .route(
+            "/v1/admin/invites/{invite_id}/resend",
+            post(controllers::auth_controller::resend_invite),
+        )
+        .route(
+            "/v1/admin/accounts/{account_id}/disable",
+            post(controllers::auth_controller::disable_account),
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
