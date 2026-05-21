@@ -33,6 +33,7 @@ const emptyInterview = {
   role: '',
   joinNonce: '',
   wsPath: '/v1/ws/interview',
+  linkExpired: false,
   results: null,
   reportPdfUrl: '',
   reportPdfError: '',

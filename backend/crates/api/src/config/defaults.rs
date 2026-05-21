@@ -12,6 +12,10 @@ pub const METRICS_LISTEN_ADDR: &str = "0.0.0.0:9090";
 pub const WEB_BASE_URL: &str = "http://localhost:4173";
 pub const SESSION_TTL_HOURS: i64 = 72;
 pub const DEFAULT_PASS_THRESHOLD: i16 = 70;
+
+/// Failed pre-interview system checks a candidate may rack up before the
+/// interview link is expired and they are sent to HR for a new one.
+pub const SHORTLINK_INCOMPAT_LIMIT: i32 = 5;
 pub const CORS_ORIGINS: &str =
     "http://localhost:4173,http://127.0.0.1:4173,http://localhost:5173,http://127.0.0.1:5173";
 

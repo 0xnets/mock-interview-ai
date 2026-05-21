@@ -204,6 +204,17 @@ export async function issueJoinNonce(code) {
   return apiFetch(`/v1/sessions/by-code/${encodeURIComponent(code)}/join`, { auth: 'optional' });
 }
 
+/// Report a failed pre-interview system check so the backend can count
+/// system-incompatibility attempts and expire the link once the limit is hit.
+/// Returns `{ incompat_count, limit, attempts_remaining, expired }`.
+export async function reportSystemIncompatible(code, { check, detail }) {
+  return apiFetch(`/v1/sessions/by-code/${encodeURIComponent(code)}/incompatible`, {
+    method: 'POST',
+    body: { check, detail },
+    auth: 'optional',
+  });
+}
+
 /// Roll the in-interview per-question grades into a final report.
 export async function finalizeInterview(sessionId) {
   return apiFetch(`/v1/interviews/${encodeURIComponent(sessionId)}/finalize`, {

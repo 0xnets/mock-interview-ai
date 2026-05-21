@@ -8,7 +8,9 @@ use persistence::repo_session;
 use crate::{
     app::AppState,
     error::{ApiError, ApiResult},
-    models::sessions::{JoinNonceResponse, SessionByCodeResponse},
+    models::sessions::{
+        JoinNonceResponse, ReportIncompatRequest, ReportIncompatResponse, SessionByCodeResponse,
+    },
 };
 
 /// Public lookup by shortcode. Returns only state + display info — no JD,
@@ -67,6 +69,35 @@ pub async fn issue_join_nonce(
         expires_at: session.expires_at,
         join_nonce: nonce,
         ws_path: "/v1/ws/interview",
+    }))
+}
+
+/// Candidate-side report that a pre-interview system check failed. Increments
+/// the link's incompatibility counter and, once the configured limit is hit,
+/// expires the session so the candidate is routed to HR for a new link. This
+/// does NOT consume the link — a candidate who fixes their setup before the
+/// limit can still join.
+pub async fn report_incompatibility(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+    Json(req): Json<ReportIncompatRequest>,
+) -> ApiResult<Json<ReportIncompatResponse>> {
+    let code = sanitize_code(&code).ok_or(ApiError::NotFound)?;
+    let limit = state.cfg.shortlink_incompat_limit;
+    let outcome = repo_session::record_incompatibility(
+        &state.pools.primary,
+        &code,
+        limit,
+        &req.check,
+        &req.detail,
+    )
+    .await?;
+
+    Ok(Json(ReportIncompatResponse {
+        incompat_count: outcome.incompat_count,
+        limit: outcome.limit,
+        attempts_remaining: (outcome.limit - outcome.incompat_count).max(0),
+        expired: outcome.expired,
     }))
 }
 

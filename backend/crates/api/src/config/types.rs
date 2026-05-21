@@ -14,6 +14,7 @@ pub struct Settings {
     pub session_ttl_hours: i64,
     pub cors_origins: Vec<String>,
     pub default_pass_threshold: i16,
+    pub shortlink_incompat_limit: i32,
 
     // AI provider
     pub anthropic_api_key: String,

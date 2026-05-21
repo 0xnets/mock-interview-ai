@@ -689,3 +689,123 @@ pub async fn increment_shortlink_hit(pool: &PgPool, code: &str) -> Result<(), Db
     .await?;
     Ok(())
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct IncompatOutcome {
+    pub incompat_count: i32,
+    pub limit: i32,
+    pub expired: bool,
+}
+
+/// Record a failed pre-interview system check ("system incompatibility") against
+/// a shortlink. Increments `shortlinks.incompat_count`; once the count reaches
+/// `limit` the interview session is moved to `expired` so the candidate is sent
+/// to HR for a fresh link. The shortlink itself is left un-consumed, so a
+/// candidate who later fixes their setup can still join while the count is below
+/// the limit. Idempotent for an already-expired session — it reports
+/// `expired: true` without incrementing further.
+pub async fn record_incompatibility(
+    pool: &PgPool,
+    code: &str,
+    limit: i32,
+    check: &str,
+    detail: &str,
+) -> Result<IncompatOutcome, DbError> {
+    let mut tx: Transaction<'_, Postgres> = pool.begin().await?;
+
+    let row: Option<(Uuid, String, DateTime<Utc>, i32)> = sqlx::query_as(
+        r#"
+        SELECT s.id, s.state, s.expires_at, l.incompat_count
+        FROM shortlinks l
+        JOIN interview_sessions s ON s.id = l.session_id
+        WHERE l.code = $1
+        FOR UPDATE OF l
+        "#,
+    )
+    .bind(code)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let (session_id, state, expires_at, incompat_count) = match row {
+        Some(r) => r,
+        None => {
+            tx.rollback().await?;
+            return Err(DbError::NotFound);
+        }
+    };
+
+    // Already dead — report it as expired without counting further.
+    if state == "expired" || expires_at < Utc::now() {
+        tx.rollback().await?;
+        return Ok(IncompatOutcome {
+            incompat_count,
+            limit,
+            expired: true,
+        });
+    }
+
+    let new_count = incompat_count + 1;
+    sqlx::query(r#"UPDATE shortlinks SET incompat_count = $1 WHERE code = $2"#)
+        .bind(new_count)
+        .bind(code)
+        .execute(&mut *tx)
+        .await?;
+
+    // Only a not-yet-started session can be expired by this path; an interview
+    // already underway is left alone.
+    let expired = new_count >= limit && matches!(state.as_str(), "pending" | "primed");
+    if expired {
+        sqlx::query(
+            r#"
+            UPDATE interview_sessions
+            SET state = 'expired'
+            WHERE id = $1
+              AND state IN ('pending', 'primed')
+            "#,
+        )
+        .bind(session_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO audit_log (session_id, action, metadata)
+        VALUES ($1, 'shortlink.incompatible', $2)
+        "#,
+    )
+    .bind(session_id)
+    .bind(serde_json::json!({
+        "code": code,
+        "check": check,
+        "detail": detail,
+        "count": new_count,
+        "limit": limit,
+    }))
+    .execute(&mut *tx)
+    .await?;
+
+    if expired {
+        sqlx::query(
+            r#"
+            INSERT INTO audit_log (session_id, action, metadata)
+            VALUES ($1, 'session.expired', $2)
+            "#,
+        )
+        .bind(session_id)
+        .bind(serde_json::json!({
+            "reason": "system_incompatible",
+            "count": new_count,
+        }))
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+
+    Ok(IncompatOutcome {
+        incompat_count: new_count,
+        limit,
+        expired,
+    })
+}

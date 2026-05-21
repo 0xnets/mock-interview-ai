@@ -14,3 +14,19 @@
 .tab.active { color: #4f46e5; border-color: #4f46e5; }
 .badge-pass { background: #d1fae5; color: #065f46; }
 .badge-fail { background: #fee2e2; color: #991b1b; }
+.check-glyph {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  line-height: 1;
+  width: 28px;
+}
+.check-idle { background: #e5e7eb; color: #4b5563; }
+.check-running { background: #dbeafe; color: #1d4ed8; }
+.check-passed { background: #d1fae5; color: #047857; }
+.check-failed { background: #fee2e2; color: #b91c1c; }

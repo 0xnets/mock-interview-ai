@@ -35,6 +35,10 @@ pub fn router(state: AppState) -> Router {
             get(controllers::sessions_controller::issue_join_nonce)
                 .post(controllers::sessions_controller::issue_join_nonce),
         )
+        .route(
+            "/v1/sessions/by-code/{code}/incompatible",
+            post(controllers::sessions_controller::report_incompatibility),
+        )
         .route("/v1/ws/interview", get(realtime::ws_handler))
         .route(
             "/v1/interviews/{id}/finalize",

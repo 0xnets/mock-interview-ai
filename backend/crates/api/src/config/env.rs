@@ -25,6 +25,10 @@ impl Settings {
         let session_ttl_hours = env_i64("SESSION_TTL_HOURS", defaults::SESSION_TTL_HOURS)?;
         let default_pass_threshold =
             env_i16("DEFAULT_PASS_THRESHOLD", defaults::DEFAULT_PASS_THRESHOLD)?;
+        let shortlink_incompat_limit = env_i32(
+            "SHORTLINK_INCOMPAT_LIMIT",
+            defaults::SHORTLINK_INCOMPAT_LIMIT,
+        )?;
         let cors_origins = env::var("CORS_ORIGINS")
             .unwrap_or_else(|_| defaults::CORS_ORIGINS.into())
             .split(',')
@@ -117,6 +121,7 @@ impl Settings {
             session_ttl_hours,
             cors_origins,
             default_pass_threshold,
+            shortlink_incompat_limit,
             anthropic_api_key,
             anthropic_model_priming,
             anthropic_model_scoring,
