@@ -1,66 +1,78 @@
 # Frontend — AI Mock Interview Platform
 
-The browser client for the AI mock interview platform: a framework-free
-Vite single-page app. HR uses it to configure interviews and generate
-candidate links; candidates use it to run a voice interview; everyone uses
-it to review graded transcripts. It talks to the Rust backend over REST and
-one WebSocket channel.
+The browser client for the AI mock interview platform: a React + Vite single
+page app. HR uses it to save interview configuration, generate candidate
+links, manage team invites, and review results; candidates use it to complete
+browser checks, run a voice interview, and view the transcript/report flow.
+It talks to the Rust backend over REST and one WebSocket channel.
 
 ## Architecture overview
 
-- **No framework.** Plain ES modules bundled by Vite. There is no React/Vue
-  runtime — DOM updates are done directly.
-- **Single HTML document.** `index.html` contains the markup for every
-  screen. `src/main.js` is the entry point: it wires global event handlers
-  and runs `bootstrap()` on `window load`.
-- **Screen-based navigation.** `ui/screens.js` (`showScreen()`) shows one
-  screen at a time by toggling visibility — there is no router.
+- **React app.** `src/main.jsx` mounts the app with React 19 and
+  `react-router-dom`. StrictMode is intentionally disabled because the
+  interview WebSocket join nonce is single-use and StrictMode would consume it
+  during the discarded development mount.
+- **Route-based screens.** `src/App.jsx` owns the route table and guards:
+  `/login`, `/accept-invite`, `/setup`, `/invites`, `/welcome`,
+  `/interview`, `/results`, and `/transcript`.
+- **Provider state.** Auth/session state, interview state, and toast messages
+  live in React providers under `src/providers/`.
 - **In-memory auth.** The JWT access token lives in memory only; the refresh
   token is an HttpOnly cookie the browser sends automatically.
+- **Candidate links.** Legacy query-param links are still accepted. `Boot`
+  routes `?invite=...` to invite acceptance and `?session=...` to the
+  candidate flow.
 
 ### Directory layout (`src/`)
 
 | Folder        | Responsibility                                                            |
 |---------------|---------------------------------------------------------------------------|
-| `app/`        | App lifecycle — `bootstrap.js`, `events.js`, `state.js`, `config.js`, `env.js`, `auth-store.js` |
-| `api/`        | REST layer — `client.js` (`apiFetch()`), `types.js`                       |
-| `auth/`       | Login + invite acceptance — `auth-flow.js`, `accept-invite.js`            |
-| `admin/`      | Admin invite management — `admin-invites.js`                              |
-| `candidate/`  | Candidate link generation + session encoding — `candidate-link.js`, `session-codec.js` |
-| `interview/`  | Interview run + question bank — `interview-flow.js`, `candidate-mode.js`, `non-tech-bank.js` |
-| `realtime/`   | Live interview WebSocket client — `ws-client.js`                          |
-| `reports/`    | Post-interview report polling — `report-waiting.js`                       |
-| `services/`   | Resume PDF parsing — `pdf-parser.service.js`                              |
-| `transcript/` | Transcript viewer — `transcript-viewer.js`                                |
-| `ui/`         | Rendering helpers — `screens.js`, `render-results.js`, `tabs.js`          |
-| `utils/`      | Small helpers — `html.js`                                                 |
-| `voice/`      | Web Speech wrappers — `speech-recognition.js`, `speech-synthesis.js`, `voice-selection.js` |
-| `styles/`     | CSS — `base.css`, `app.css`, `components.css`, `screens.css`, `animations.css` |
+| `api/`        | REST layer — `client.js` (`apiFetch()`), response helpers, DTO docs        |
+| `app/`        | Env parsing and in-memory auth token store                                 |
+| `candidate/`  | Candidate session loading and short-code handling                          |
+| `components/` | Shared React UI: shell, tabs, HR config, link generation, PDF textarea     |
+| `hooks/`      | React hooks for speech recognition and browser voices                      |
+| `interview/`  | Behavioral bank parsing/editing and default non-technical questions        |
+| `providers/`  | Auth, app state, and toast providers                                       |
+| `realtime/`   | Live interview WebSocket client                                            |
+| `reports/`    | Post-interview report polling                                              |
+| `screens/`    | Route-level React screens                                                  |
+| `services/`   | Resume/JD PDF text extraction with PDF.js                                  |
+| `system/`     | Candidate pre-interview browser, mic, speaker, network, and voice checks   |
+| `transcript/` | Transcript viewer helpers                                                  |
+| `utils/`      | Clipboard and validation helpers                                           |
+| `voice/`      | Speech synthesis and voice selection                                       |
+| `styles/`     | CSS bundles loaded by `main.jsx`                                           |
 
 ## How it works
 
-- **Bootstrap.** `main.js` calls `attachEventHandlers()` and registers
-  `bootstrap()` for `window load`. `bootstrap()` loads config, restores any
-  session, and shows the appropriate first screen.
-- **API layer.** `api/client.js` exposes `apiFetch()`, which attaches the
-  access token, sends credentials (for the refresh cookie), and surfaces
-  `ApiError`. `app/auth-store.js` keeps the access token in memory and
-  schedules a silent refresh before it expires.
-- **Realtime interview.** `realtime/ws-client.js` opens a single WebSocket
-  to `/v1/ws/interview`. The backend streams questions/follow-ups; the
-  client streams the candidate's answers as they are transcribed.
-- **Voice.** `voice/` wraps the browser **Web Speech API** — speech
-  recognition (STT) for answers and speech synthesis (TTS) for questions.
-- **Resume parsing.** `services/pdf-parser.service.js` uses PDF.js to
-  extract text from an uploaded resume **only**. The graded report PDF is
-  rendered server-side and downloaded from the backend.
-- **Config.** Settings come from `.env`. Vite only exposes variables whose
-  prefix is listed in `vite.config.js` (`APP_`, `SPEECH_`, `VOICE_`, …).
+- **Boot.** `/` runs the `Boot` dispatcher in `App.jsx`. It handles invite
+  deep links, candidate session links, and silent HR refresh before routing to
+  the correct first screen.
+- **API layer.** `api/client.js` attaches the access token, includes
+  credentials for the refresh cookie, and surfaces API failures as `ApiError`.
+  `app/auth-store.js` schedules silent refresh before access-token expiry.
+- **HR config.** `/setup` saves account-scoped HR configuration through
+  `GET/PUT /v1/me/config`: report recipient, question counts, pass threshold,
+  interviewer voice, and the behavioral bank. The bank editor supports
+  sectioned `## Section` text with limits mirrored from backend validation.
+- **Candidate generation.** HR pastes or uploads JD/resume PDFs in the
+  generate-link tab. PDF.js extracts text into editable textareas; the backend
+  still owns question generation, grading, report rendering, and email.
+- **Pre-interview checks.** Before joining, candidates run checks for browser
+  support, microphone input level, speaker output, backend reachability, and
+  voice synthesis. Device/browser failures are reported to the backend without
+  consuming the candidate link.
+- **Realtime interview.** `realtime/ws-client.js` opens a WebSocket to
+  `/v1/ws/interview` using a single-use join nonce. The backend streams
+  questions/follow-ups; the client streams candidate answers as transcripts.
+- **Voice.** Browser Web Speech APIs provide speech recognition for answers
+  and speech synthesis for interviewer prompts. Chrome or Edge is recommended.
 
 ## Local setup
 
-**Prerequisites:** Node.js >= 18, npm, and Chrome or Edge — the Web Speech
-API is unreliable in Safari and Firefox.
+**Prerequisites:** Node.js >= 18, npm, and Chrome or Edge. Safari and Firefox
+do not reliably expose the required Web Speech APIs.
 
 ```bash
 # 1. Enter the frontend folder
@@ -88,7 +100,7 @@ Open `http://localhost:4173` in Chrome or Edge.
 |-------------------|-------------------------------------------------------|
 | `npm run build`   | Production bundle into `dist/`                        |
 | `npm run preview` | Serve the built `dist/` bundle                        |
-| `npm run check`   | `node --check` on every `.js` + import resolution     |
+| `npm run check`   | `node --check` on `.js` files + import resolution     |
 
 ### Troubleshooting
 
@@ -97,11 +109,16 @@ Open `http://localhost:4173` in Chrome or Edge.
 - **CORS errors in the console** — add the dev origin to the backend's
   `CORS_ORIGINS`.
 - **No microphone / no voice** — use Chrome or Edge, served over
-  `localhost` (Web Speech requires a secure context).
+  `localhost` or HTTPS, and allow microphone access.
+- **Candidate check says no input** — speak during the 5-second mic-level
+  check and confirm the browser is using the intended input device.
+- **Invite link opens the token form** — paste the invite token manually; the
+  screen accepts `invite`, `accept_invite`, and `token` query params.
 
 ## Running the full stack locally
 
 1. Start backend dependencies and the API (see `backend/README.md`).
 2. `npm run dev` here.
 3. Open `http://localhost:4173`, sign in with the bootstrapped admin
-   account, create invites, and run an interview.
+   account, configure HR settings, create invites or candidate links, and run
+   an interview.
