@@ -42,6 +42,14 @@ pub struct Settings {
     pub mail_from_address: String,
     pub mail_reply_to: Option<String>,
 
+    // Retention worker
+    pub feature_retention_worker: bool,
+    pub retention_poll_interval_secs: u64,
+    pub retention_transcript_days: i64,
+    pub retention_answers_days: i64,
+    pub retention_pii_days: i64,
+    pub retention_outbox_days: i64,
+
     // ─── Phase 6 ───────────────────────────────────────────────────────────
 
     // Auth + cookies

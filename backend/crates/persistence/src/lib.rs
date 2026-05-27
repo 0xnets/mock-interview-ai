@@ -6,6 +6,7 @@ pub mod repo_outbox;
 pub mod repo_rate_limit;
 pub mod repo_realtime;
 pub mod repo_reports;
+pub mod repo_retention;
 pub mod repo_session;
 pub mod repo_transcript;
 

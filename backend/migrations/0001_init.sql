@@ -212,27 +212,16 @@ CREATE TABLE rate_limit_overrides (
     UNIQUE (account_id, route)
 );
 
--- Fixed dev HR account used by legacy session references.
-INSERT INTO accounts (id, email, role, status, display_name)
-VALUES (
-    '00000000-0000-0000-0000-000000000001',
-    'default-hr@local',
-    'hr',
-    'active',
-    'Default HR (dev)'
-)
-ON CONFLICT (id) DO NOTHING;
-
--- Local admin account for fresh development databases.
+-- Local super admin account for fresh development databases.
 -- Password is "admin-local-password".
 INSERT INTO accounts (id, email, password_hash, role, status, display_name)
 VALUES (
     '00000000-0000-0000-0000-000000000007',
     'admin@local.test',
     '$argon2id$v=19$m=19456,t=2,p=1$bG9jYWxhZG1pbnNhbHQwMQ$r4wrcuVkLIIcm7uHd6RR0lszwIzlO1AZ5l+YtRKIfUU',
-    'admin',
+    'super_admin',
     'active',
-    'Local Admin'
+    'Local Super Admin'
 )
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email,

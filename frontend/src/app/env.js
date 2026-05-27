@@ -2,13 +2,15 @@ function defaultApiBaseUrl() {
   if (typeof window === 'undefined' || !window.location?.hostname) {
     return 'http://localhost:8080';
   }
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8080';
+  }
   const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-  return `${protocol}//${window.location.hostname}:8080`;
+  return `${protocol}//${window.location.host}`;
 }
 
 const DEFAULT_ENV = {
   DEFAULT_TECH_QUESTION_COUNT: '5',
-  DEFAULT_NON_TECH_QUESTION_COUNT: '5',
   DEFAULT_PASS_THRESHOLD: '90',
   MAX_CANDIDATE_NAME_CHARS: '120',
   MAX_ROLE_TITLE_CHARS: '160',
@@ -41,8 +43,6 @@ const DEFAULT_ENV = {
   RESULT_FAIL_COLOR: '#ef4444',
   RESULT_RING_RADIUS: '70',
   RESULT_WARNING_SCORE_THRESHOLD: '70',
-  WHATSAPP_SHARE_URL: 'https://wa.me/?text=',
-  EMAIL_SHARE_SCHEME: 'mailto:',
   APP_API_BASE_URL: defaultApiBaseUrl()
 };
 

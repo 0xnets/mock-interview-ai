@@ -98,6 +98,25 @@ pub static OUTBOX_DISPATCH_LATENCY_MS: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("register outbox_dispatch_latency_ms")
 });
 
+pub static RETENTION_ROWS_AFFECTED_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "retention_rows_affected_total",
+        "Rows touched by the retention worker",
+        &["table", "action"]
+    )
+    .expect("register retention_rows_affected_total")
+});
+
+pub static RETENTION_TICK_LATENCY_MS: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "retention_tick_latency_ms",
+        "Time spent in a single retention worker tick (ms)",
+        &["status"],
+        vec![5.0, 25.0, 100.0, 500.0, 2_500.0, 10_000.0, 60_000.0]
+    )
+    .expect("register retention_tick_latency_ms")
+});
+
 pub static WS_SESSIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
     register_gauge!("ws_sessions_active", "Live WebSocket sessions")
         .expect("register ws_sessions_active")
@@ -162,6 +181,8 @@ pub fn init() {
     Lazy::force(&OUTBOX_PENDING);
     Lazy::force(&OUTBOX_ATTEMPTS_TOTAL);
     Lazy::force(&OUTBOX_DISPATCH_LATENCY_MS);
+    Lazy::force(&RETENTION_ROWS_AFFECTED_TOTAL);
+    Lazy::force(&RETENTION_TICK_LATENCY_MS);
     Lazy::force(&WS_SESSIONS_ACTIVE);
     Lazy::force(&WS_UTTERANCES_TOTAL);
     Lazy::force(&TRANSCRIPT_CHUNKS_TOTAL);
@@ -182,6 +203,8 @@ pub fn init() {
         Box::new(OUTBOX_PENDING.clone()),
         Box::new(OUTBOX_ATTEMPTS_TOTAL.clone()),
         Box::new(OUTBOX_DISPATCH_LATENCY_MS.clone()),
+        Box::new(RETENTION_ROWS_AFFECTED_TOTAL.clone()),
+        Box::new(RETENTION_TICK_LATENCY_MS.clone()),
         Box::new(WS_SESSIONS_ACTIVE.clone()),
         Box::new(WS_UTTERANCES_TOTAL.clone()),
         Box::new(TRANSCRIPT_CHUNKS_TOTAL.clone()),

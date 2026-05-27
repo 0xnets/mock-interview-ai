@@ -72,6 +72,24 @@ impl Settings {
             env::var("MAIL_FROM_ADDRESS").unwrap_or_else(|_| defaults::MAIL_FROM_ADDRESS.into());
         let mail_reply_to = env::var("MAIL_REPLY_TO").ok().filter(|s| !s.is_empty());
 
+        let feature_retention_worker = env_bool(
+            "FEATURE_RETENTION_WORKER",
+            defaults::FEATURE_RETENTION_WORKER,
+        );
+        let retention_poll_interval_secs = env_u64(
+            "RETENTION_POLL_INTERVAL_SECS",
+            defaults::RETENTION_POLL_INTERVAL_SECS,
+        )?;
+        let retention_transcript_days = env_i64(
+            "RETENTION_TRANSCRIPT_DAYS",
+            defaults::RETENTION_TRANSCRIPT_DAYS,
+        )?;
+        let retention_answers_days =
+            env_i64("RETENTION_ANSWERS_DAYS", defaults::RETENTION_ANSWERS_DAYS)?;
+        let retention_pii_days = env_i64("RETENTION_PII_DAYS", defaults::RETENTION_PII_DAYS)?;
+        let retention_outbox_days =
+            env_i64("RETENTION_OUTBOX_DAYS", defaults::RETENTION_OUTBOX_DAYS)?;
+
         // ─── Phase 6 ───────────────────────────────────────────────────────
 
         let feature_jwt_auth = env_bool("FEATURE_JWT_AUTH", defaults::FEATURE_JWT_AUTH);
@@ -138,6 +156,12 @@ impl Settings {
             resend_api_key,
             mail_from_address,
             mail_reply_to,
+            feature_retention_worker,
+            retention_poll_interval_secs,
+            retention_transcript_days,
+            retention_answers_days,
+            retention_pii_days,
+            retention_outbox_days,
             feature_jwt_auth,
             access_token_ttl_minutes,
             refresh_token_ttl_days,

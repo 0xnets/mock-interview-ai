@@ -101,6 +101,14 @@ async fn main() -> anyhow::Result<()> {
         outbox.run().await;
     });
 
+    if cfg.feature_retention_worker {
+        let retention =
+            workers::retention::RetentionWorker::new(pools.primary.clone(), cfg.clone());
+        tokio::spawn(async move {
+            retention.run().await;
+        });
+    }
+
     // ─── Phase 6: stream consumer (if enabled) ─────────────────────────────
     if cfg.feature_redis_outbox {
         if let Some(r) = redis.clone() {

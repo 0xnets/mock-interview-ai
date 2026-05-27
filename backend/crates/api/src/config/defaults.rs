@@ -63,6 +63,14 @@ pub const OUTBOX_MAX_ATTEMPTS: i32 = 5;
 pub const FEATURE_BACKEND_MAILER: bool = true;
 pub const MAIL_FROM_ADDRESS: &str = "reports@example.com";
 
+// ─── Retention worker ──────────────────────────────────────────────────────
+pub const FEATURE_RETENTION_WORKER: bool = true;
+pub const RETENTION_POLL_INTERVAL_SECS: u64 = 86_400;
+pub const RETENTION_TRANSCRIPT_DAYS: i64 = 7;
+pub const RETENTION_ANSWERS_DAYS: i64 = 30;
+pub const RETENTION_PII_DAYS: i64 = 30;
+pub const RETENTION_OUTBOX_DAYS: i64 = 30;
+
 // ─── Phase 6 — auth + cookies ──────────────────────────────────────────────
 pub const FEATURE_JWT_AUTH: bool = true;
 pub const ACCESS_TOKEN_TTL_MINUTES: i64 = 15;
