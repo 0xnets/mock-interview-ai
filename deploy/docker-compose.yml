@@ -1,0 +1,60 @@
+name: mock-interview
+
+services:
+  app:
+    # In prod the EC2 pulls this tag from the registry — `docker compose pull`.
+    # On a dev machine, `docker compose build` rebuilds + tags it locally so
+    # the next `up` uses the fresh image. APP_IMAGE comes from .env so you
+    # can switch registries without touching this file.
+    image: ${APP_IMAGE:-mock-interview-app:latest}
+    platform: ${APP_PLATFORM:-linux/amd64}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    pull_policy: ${PULL_POLICY:-missing}
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

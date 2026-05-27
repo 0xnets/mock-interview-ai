@@ -16,6 +16,9 @@ backend/.env.backend.*
 !backend/**/example.env
 backend/.sqlx/
 
+# Deploy
+deploy/.env
+
 # Knowledge graph (local-only)
 graphify-out/
 

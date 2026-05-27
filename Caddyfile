@@ -1,0 +1,31 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+    encode gzip zstd
+
+    # API + WebSocket — proxy everything under /v1 to the local Rust api.
+    # The WS route is /v1/ws/interview, so a single /v1/* match covers both
+    # REST and the WebSocket upgrade (Caddy handles upgrade headers natively).
+    handle /v1/* {
+        reverse_proxy 127.0.0.1:8080
+    }
+
+    # Liveness probe convenience
+    handle /healthz {
+        reverse_proxy 127.0.0.1:8080
+    }
+
+    # SPA — serve the built Vite bundle, fall back to index.html for client-side routes.
+    handle {
+        root * /srv/dist
+        try_files {path} /index.html
+        file_server
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}
