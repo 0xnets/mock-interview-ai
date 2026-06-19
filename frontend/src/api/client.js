@@ -231,6 +231,7 @@ function fromApiConfig(resp) {
       nonTechBank: serializeBank(c.behavioral_bank || {}),
       passThreshold: Number(c.pass_threshold) || 0,
       voiceName: c.voice_name || '',
+      answerTimeLimitMs: Number(c.answer_time_limit_ms) || envNumber('ANSWER_TIME_LIMIT_MS'),
     },
     saved: Boolean(resp && resp.saved),
   };
@@ -245,6 +246,7 @@ function toApiConfig(config) {
     behavioral_bank: parseNonTechBank(config.nonTechBank || ''),
     pass_threshold: Number(config.passThreshold) || 0,
     voice_name: config.voiceName || '',
+    answer_time_limit_ms: Number(config.answerTimeLimitMs) || envNumber('ANSWER_TIME_LIMIT_MS'),
   };
 }
 

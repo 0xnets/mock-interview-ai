@@ -380,7 +380,17 @@ pub async fn load_graded_session(
         LEFT JOIN answers a ON a.question_id = q.id
         LEFT JOIN question_grades g ON g.question_id = q.id
         WHERE q.session_id = $1
-        ORDER BY q.ordinal
+        ORDER BY
+            COALESCE(
+                (
+                    SELECT parent.ordinal
+                    FROM questions parent
+                    WHERE parent.id = q.parent_question_id
+                ),
+                q.ordinal
+            ),
+            CASE WHEN q.kind = 'followup' THEN 1 ELSE 0 END,
+            q.ordinal
         "#,
     )
     .bind(session_id)

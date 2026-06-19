@@ -220,6 +220,7 @@ pub fn render_report_pdf(r: &ReportForRender) -> Result<Vec<u8>> {
                 .unwrap_or("Question");
             let score = it.get("score").and_then(|v| v.as_i64());
             let question = it.get("question").and_then(|v| v.as_str()).unwrap_or("");
+            let answer = it.get("answer").and_then(|v| v.as_str()).unwrap_or("");
             let feedback = it.get("feedback").and_then(|v| v.as_str()).unwrap_or("");
             let header = match score {
                 Some(s) => format!("Q{} ({}) — {}%", q, section_lbl, s),
@@ -230,6 +231,18 @@ pub fn render_report_pdf(r: &ReportForRender) -> Result<Vec<u8>> {
                 c.write_wrapped(
                     &doc,
                     &format!("Question: {question}"),
+                    9.0,
+                    false,
+                    None,
+                    MARGIN,
+                    CONTENT_W,
+                    MARGIN + 17.0,
+                );
+            }
+            if !answer.trim().is_empty() {
+                c.write_wrapped(
+                    &doc,
+                    &format!("Answer: {}", answer.trim()),
                     9.0,
                     false,
                     None,

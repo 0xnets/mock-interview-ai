@@ -278,6 +278,7 @@ export function CandidateWelcomeScreen() {
       updateInterview({
         joinNonce: nonceInfo.join_nonce,
         wsPath: nonceInfo.ws_path || '/v1/ws/interview',
+        answerTimeLimitMs: Number(nonceInfo.answer_time_limit_ms) || interview.answerTimeLimitMs,
       });
       navigate(`/interview${location.search}`);
     } catch (e) {

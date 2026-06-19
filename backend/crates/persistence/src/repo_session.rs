@@ -44,6 +44,7 @@ pub struct SessionByCode {
     pub role_title: String,
     pub expires_at: DateTime<Utc>,
     pub shortcode: String,
+    pub answer_time_limit_ms: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -320,9 +321,18 @@ pub async fn mark_aborted(pool: &PgPool, session_id: Uuid, reason: &str) -> Resu
 }
 
 pub async fn find_by_shortcode(pool: &PgPool, code: &str) -> Result<SessionByCode, DbError> {
-    let row: Option<(Uuid, String, String, String, DateTime<Utc>, String)> = sqlx::query_as(
+    let row: Option<(
+        Uuid,
+        String,
+        String,
+        String,
+        DateTime<Utc>,
+        String,
+        serde_json::Value,
+    )> = sqlx::query_as(
         r#"
-        SELECT s.id, s.state, s.candidate_name, s.role_title, s.expires_at, s.shortcode
+        SELECT s.id, s.state, s.candidate_name, s.role_title, s.expires_at, s.shortcode,
+               s.config_snapshot
         FROM interview_sessions s
         JOIN shortlinks l ON l.session_id = s.id
         WHERE l.code = $1
@@ -340,7 +350,16 @@ pub async fn find_by_shortcode(pool: &PgPool, code: &str) -> Result<SessionByCod
         role_title: row.3,
         expires_at: row.4,
         shortcode: row.5,
+        answer_time_limit_ms: snapshot_answer_time_limit_ms(&row.6),
     })
+}
+
+fn snapshot_answer_time_limit_ms(snapshot: &serde_json::Value) -> u32 {
+    snapshot
+        .get("answer_time_limit_ms")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok())
+        .unwrap_or(180_000)
 }
 
 /// Atomically claim a shortlink on the first candidate join. The link is
@@ -359,6 +378,7 @@ type SessionByCodeRow = (
     String,
     DateTime<Utc>,
     String,
+    serde_json::Value,
     Option<DateTime<Utc>>,
 );
 
@@ -368,7 +388,7 @@ pub async fn consume_shortlink(pool: &PgPool, code: &str) -> Result<SessionByCod
     let row: Option<SessionByCodeRow> = sqlx::query_as(
         r#"
             SELECT s.id, s.state, s.candidate_name, s.role_title, s.expires_at,
-                   s.shortcode, l.consumed_at
+                   s.shortcode, s.config_snapshot, l.consumed_at
             FROM shortlinks l
             JOIN interview_sessions s ON s.id = l.session_id
             WHERE l.code = $1
@@ -394,8 +414,9 @@ pub async fn consume_shortlink(pool: &PgPool, code: &str) -> Result<SessionByCod
         role_title: row.3,
         expires_at: row.4,
         shortcode: row.5,
+        answer_time_limit_ms: snapshot_answer_time_limit_ms(&row.6),
     };
-    let consumed_at = row.6;
+    let consumed_at = row.7;
 
     if session.expires_at < Utc::now() {
         tx.rollback().await?;

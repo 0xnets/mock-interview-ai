@@ -58,6 +58,7 @@ pub async fn create(
         behavioral_count: config.behavioral_count,
         include_intro: body.include_intro,
         pass_threshold: config.pass_threshold,
+        answer_time_limit_ms: config.answer_time_limit_ms,
         behavioral_bank: config.behavioral_bank.clone(),
     };
 
@@ -182,7 +183,15 @@ pub async fn finalize(
     };
 
     // Synthesize narrative sections.
-    let graded_json = serde_json::to_string(&per_question)
+    let mut per_question_for_summary = per_question.clone();
+    if let Some(items) = per_question_for_summary.as_array_mut() {
+        for item in items {
+            if let Some(obj) = item.as_object_mut() {
+                obj.remove("answer");
+            }
+        }
+    }
+    let graded_json = serde_json::to_string(&per_question_for_summary)
         .map_err(|e| ApiError::Internal(format!("serialize grades: {e}")))?;
 
     let sys = prompts::summary_system();

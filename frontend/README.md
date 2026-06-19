@@ -79,7 +79,8 @@ do not reliably expose the required Web Speech APIs.
 cd frontend
 
 # 2. Create your env file; override APP_API_BASE_URL if the backend
-#    is not on http://localhost:8080
+#    is not on http://localhost:8080. ANSWER_TIME_LIMIT_MS controls
+#    the per-question answer timer; the default is 180000 (3 minutes).
 cp example.env .env
 
 # 3. Install dependencies

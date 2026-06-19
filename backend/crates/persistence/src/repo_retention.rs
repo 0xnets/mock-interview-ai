@@ -418,4 +418,3 @@ mod tests {
     #[allow(unused)]
     fn _unused_chrono_ref(_: ChronoDuration) {}
 }
-

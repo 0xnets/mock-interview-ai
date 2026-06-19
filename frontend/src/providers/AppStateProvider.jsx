@@ -17,6 +17,7 @@ function defaultConfig() {
     nonTechBank: '',
     passThreshold: envNumber('DEFAULT_PASS_THRESHOLD'),
     voiceName: '',
+    answerTimeLimitMs: envNumber('ANSWER_TIME_LIMIT_MS'),
   };
 }
 
@@ -34,6 +35,7 @@ const emptyInterview = {
   results: null,
   reportPdfUrl: '',
   reportPdfError: '',
+  answerTimeLimitMs: envNumber('ANSWER_TIME_LIMIT_MS'),
 };
 
 export function AppStateProvider({ children }) {

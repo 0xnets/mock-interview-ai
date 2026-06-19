@@ -10,6 +10,7 @@ pub struct SessionByCodeResponse {
     pub role_title: String,
     pub expires_at: DateTime<Utc>,
     pub shortcode: String,
+    pub answer_time_limit_ms: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -21,6 +22,7 @@ pub struct JoinNonceResponse {
     pub expires_at: DateTime<Utc>,
     pub join_nonce: String,
     pub ws_path: &'static str,
+    pub answer_time_limit_ms: u32,
 }
 
 /// Candidate-side report that a pre-interview system check failed because the

@@ -88,6 +88,7 @@ pub fn build_per_question(graded: &[GradedQuestion]) -> Vec<PerQuestionEntry> {
                 q: q.ordinal,
                 section,
                 question: q.prompt_text.clone(),
+                answer: q.answer_text.clone(),
                 score: q.grade.as_ref().map(|g| g.score),
                 feedback: q
                     .grade
@@ -110,5 +111,36 @@ pub fn time_bucket(duration_ms: i32) -> &'static str {
         15_000..=120_000 => "normal",
         120_001..=240_000 => "long",
         _ => "very_long",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use persistence::repo_realtime::{GradeRow, GradedQuestion};
+    use uuid::Uuid;
+
+    #[test]
+    fn build_per_question_includes_candidate_answer() {
+        let entries = build_per_question(&[GradedQuestion {
+            question_id: Uuid::nil(),
+            ordinal: 1,
+            kind: "technical".to_string(),
+            prompt_text: "How would you design a queue?".to_string(),
+            answer_text: "I would use a durable broker with retries.".to_string(),
+            duration_ms: Some(42_000),
+            grade: Some(GradeRow {
+                score: 84,
+                reasoning: "Good tradeoff discussion.".to_string(),
+                model: "test-model".to_string(),
+                prompt_version: "test-prompt".to_string(),
+            }),
+        }]);
+
+        assert_eq!(
+            entries[0].answer,
+            "I would use a durable broker with retries."
+        );
+        assert_eq!(entries[0].duration_seconds, Some(42));
     }
 }

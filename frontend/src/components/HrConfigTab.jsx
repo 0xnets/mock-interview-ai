@@ -34,6 +34,7 @@ export function HrConfigTab() {
     techCount: config.techCount,
     passThreshold: config.passThreshold,
     voiceName: config.voiceName || '',
+    answerTimeLimitMs: config.answerTimeLimitMs || envNumber('ANSWER_TIME_LIMIT_MS'),
   }));
   const [bankText, setBankText] = useState(config.nonTechBank || '');
   const [sectionInput, setSectionInput] = useState(DEFAULT_NON_TECH_SECTION);
@@ -70,6 +71,7 @@ export function HrConfigTab() {
       techCount: config.techCount,
       passThreshold: config.passThreshold,
       voiceName: config.voiceName || '',
+      answerTimeLimitMs: config.answerTimeLimitMs || envNumber('ANSWER_TIME_LIMIT_MS'),
     });
     setBankText(config.nonTechBank || '');
     setActiveSection('');
@@ -118,6 +120,7 @@ export function HrConfigTab() {
         nonTechBank: trimmedBank,
         passThreshold: parseInt(form.passThreshold, 10) || envNumber('DEFAULT_PASS_THRESHOLD'),
         voiceName: selectValue,
+        answerTimeLimitMs: Number(form.answerTimeLimitMs) || envNumber('ANSWER_TIME_LIMIT_MS'),
       });
       setSaveStatus(true);
       setTimeout(() => setSaveStatus(false), envNumber('CONFIG_SAVE_STATUS_MS'));
@@ -208,9 +211,9 @@ export function HrConfigTab() {
     <div>
       <h2 className="text-xl font-bold mb-4">HR Configuration</h2>
       <p className="text-sm text-gray-600 mb-4">
-        Configure report delivery, question counts, behavioral sections, pass threshold, and
-        interviewer voice. These HR settings are saved to your account and reused for future
-        interviews.
+        Configure report delivery, question counts, behavioral sections, pass threshold, answer
+        timing, and interviewer voice. These HR settings are saved to your account and reused for
+        future interviews.
       </p>
 
       {configStatus === 'loading' && (
@@ -234,6 +237,7 @@ export function HrConfigTab() {
                   `${summarySections.length} behavioral`,
                   `${summarySections.length} behavioral ${summarySections.length === 1 ? 'section' : 'sections'}`,
                   `${config.passThreshold}% pass threshold`,
+                  `${Math.ceil((config.answerTimeLimitMs || envNumber('ANSWER_TIME_LIMIT_MS')) / 1000)}s answer limit`,
                 ].join(' • ')}
               </div>
             </div>
@@ -417,6 +421,18 @@ export function HrConfigTab() {
             />
             <p className="text-xs text-gray-500 mt-1">
               Candidates need this score to advance to the human round.
+            </p>
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold mb-2">Answer Time Limit (seconds)</label>
+            <input
+              type="number" min="30" max="600" step="15" className="input w-32"
+              value={Math.ceil((Number(form.answerTimeLimitMs) || envNumber('ANSWER_TIME_LIMIT_MS')) / 1000)}
+              onChange={e => setField('answerTimeLimitMs', (parseInt(e.target.value, 10) || 180) * 1000)}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Each question auto-submits when this time runs out.
             </p>
           </div>
 

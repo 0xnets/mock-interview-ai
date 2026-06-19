@@ -19,16 +19,26 @@ function computePreamble(section, ordinal, candidateName, lastSection) {
   }
   if (lastSection && lastSection !== section) {
     if (section === 'Behavioral') return "Great. Now let's move to the behavioral questions. ";
-    if (section === 'Technical') return "Now let's move to the technical questions. ";
   }
   return '';
+}
+
+function formatRemainingTime(totalSeconds) {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 export function InterviewScreen() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { interview, updateInterview } = useAppState();
+  const { interview, config, updateInterview } = useAppState();
   const toast = useToast();
+  const answerTimeLimitMs = Math.max(
+    1000,
+    Number(interview.answerTimeLimitMs || config.answerTimeLimitMs) || 180000,
+  );
 
   // Mount snapshots of interview context — set once before this screen mounts.
   const candidateNameRef = useRef(interview.candidateName);
@@ -43,8 +53,11 @@ export function InterviewScreen() {
   const [question, setQuestion] = useState('Connecting to interviewer…');
   const [micStatus, setMicStatus] = useState('');
   const [micEnabled, setMicEnabled] = useState(false);
+  const [micStartedForQuestion, setMicStartedForQuestion] = useState(false);
   const [submitEnabled, setSubmitEnabled] = useState(false);
   const [followupThinking, setFollowupThinking] = useState(false);
+  const [questionDictating, setQuestionDictating] = useState(false);
+  const [answerTimeRemainingSeconds, setAnswerTimeRemainingSeconds] = useState(null);
 
   const socketRef = useRef(null);
   const utteranceSeqRef = useRef(0);
@@ -54,6 +67,12 @@ export function InterviewScreen() {
   const lastSectionRef = useRef(null);
   const currentQuestionRef = useRef('');
   const finalizedRef = useRef(false);
+  const answerTimerDeadlineRef = useRef(0);
+  const answerTimeoutRef = useRef(null);
+  const answerIntervalRef = useRef(null);
+  const submittedOrdinalRef = useRef(null);
+  const latestFinalTranscriptRef = useRef('');
+  const latestInterimTranscriptRef = useRef('');
 
   const recog = useSpeechRecognition({
     onFinalChunk: (text) => {
@@ -71,21 +90,65 @@ export function InterviewScreen() {
       if (err === 'unsupported') {
         toast.error("Your browser doesn't support speech recognition. Please use Chrome or Edge.");
       } else if (err === 'no-speech') {
-        setMicStatus("Didn't catch that — click the mic and try again.");
+        setMicStatus('No speech detected yet. Keep answering; Submit will unlock once speech is captured.');
       } else if (err === 'not-allowed') {
         setMicStatus('Microphone permission denied. Allow it in browser settings and reload.');
       }
     },
   });
 
-  // Mirror the original onresult behavior: a non-empty final transcript enables Submit.
+  // Enable Submit as soon as speech appears, including interim text.
   useEffect(() => {
-    if (recog.finalTranscript.trim().length > 0) setSubmitEnabled(true);
-  }, [recog.finalTranscript]);
+    if ((recog.finalTranscript + recog.interimTranscript).trim().length > 0) setSubmitEnabled(true);
+  }, [recog.finalTranscript, recog.interimTranscript]);
+
+  useEffect(() => {
+    latestFinalTranscriptRef.current = recog.finalTranscript;
+    latestInterimTranscriptRef.current = recog.interimTranscript;
+  }, [recog.finalTranscript, recog.interimTranscript]);
+
+  function clearAnswerTimer() {
+    if (answerTimeoutRef.current) {
+      window.clearTimeout(answerTimeoutRef.current);
+      answerTimeoutRef.current = null;
+    }
+    if (answerIntervalRef.current) {
+      window.clearInterval(answerIntervalRef.current);
+      answerIntervalRef.current = null;
+    }
+    answerTimerDeadlineRef.current = 0;
+    setAnswerTimeRemainingSeconds(null);
+  }
+
+  function updateAnswerTimeRemaining() {
+    if (!answerTimerDeadlineRef.current) return;
+    const remainingMs = answerTimerDeadlineRef.current - Date.now();
+    if (remainingMs <= 0) {
+      setAnswerTimeRemainingSeconds(0);
+      submitAnswer({ allowEmpty: true, timeout: true });
+      return;
+    }
+    setAnswerTimeRemainingSeconds(Math.ceil(remainingMs / 1000));
+  }
+
+  function startAnswerTimer() {
+    clearAnswerTimer();
+    answerTimerDeadlineRef.current = Date.now() + answerTimeLimitMs;
+    setAnswerTimeRemainingSeconds(Math.ceil(answerTimeLimitMs / 1000));
+    answerIntervalRef.current = window.setInterval(updateAnswerTimeRemaining, 250);
+    answerTimeoutRef.current = window.setTimeout(() => {
+      setAnswerTimeRemainingSeconds(0);
+      submitAnswer({ allowEmpty: true, timeout: true });
+    }, answerTimeLimitMs);
+  }
+
+  useEffect(() => () => clearAnswerTimer(), []);
 
   async function renderQuestionFromServer(msg) {
+    clearAnswerTimer();
     const ordinal = msg.ordinal;
     currentOrdinalRef.current = ordinal;
+    submittedOrdinalRef.current = null;
 
     const section = msg.t === 'followup'
       ? 'Follow-up'
@@ -101,30 +164,41 @@ export function InterviewScreen() {
     currentQuestionRef.current = msg.text;
     setSubmitEnabled(false);
     setMicEnabled(false);
+    setMicStartedForQuestion(false);
     setFollowupThinking(false);
-    setMicStatus('🔊 Listen to the question...');
+    setQuestionDictating(true);
+    setMicStatus('Listen to the question...');
     recog.reset();
 
     const preamble = computePreamble(section, ordinal, candidateNameRef.current, lastSectionRef.current);
     lastSectionRef.current = section;
 
-    await speak(preamble + msg.text);
+    try {
+      await speak(preamble + msg.text);
+    } finally {
+      setQuestionDictating(false);
+    }
 
     questionStartedAtRef.current = Date.now();
+    startAnswerTimer();
     setMicEnabled(true);
-    setMicStatus('Click the microphone when ready to answer.');
+    setMicStatus('Click the microphone to start answering.');
   }
 
   function handleStateChange(value) {
     if (value === 'thinking') {
-      setMicStatus('🤔 Interviewer is preparing a follow-up…');
+      clearAnswerTimer();
+      setMicStatus('Interviewer is preparing a follow-up...');
       setMicEnabled(false);
+      setMicStartedForQuestion(false);
       setSubmitEnabled(false);
       setFollowupThinking(true);
+      setQuestionDictating(false);
     }
   }
 
   async function finalizeAndShow() {
+    clearAnswerTimer();
     recog.stop();
     finalizedRef.current = true;
     setPhase('finalizing');
@@ -224,25 +298,23 @@ export function InterviewScreen() {
   }, []);
 
   function handleMicToggle() {
-    const wasListening = recog.isListening;
+    if (!micEnabled || micStartedForQuestion || recog.isListening) return;
     recog.toggle();
     if (!recog.supported) return; // toggle() already alerted via onError
-    if (wasListening) {
-      setMicStatus(recog.finalTranscript.trim()
-        ? 'Click Submit to continue, or 🎤 to re-record.'
-        : 'No speech detected. Click 🎤 to try again.');
-    } else {
-      setMicStatus('Listening — click again when done answering');
-    }
+    setMicStartedForQuestion(true);
+    setMicStatus('Recording your answer. Submit when you are done.');
   }
 
-  function handleSubmit() {
-    const answer = (recog.finalTranscript + recog.interimTranscript).trim();
-    if (!answer) { toast.warning('Please record an answer first.'); return; }
+  function submitAnswer({ allowEmpty = false, timeout = false } = {}) {
+    const answer = (latestFinalTranscriptRef.current + latestInterimTranscriptRef.current).trim();
+    if (!allowEmpty && !answer) { toast.warning('Please record an answer first.'); return; }
     recog.stop();
 
     const ordinal = currentOrdinalRef.current;
     if (ordinal == null) return;
+    if (submittedOrdinalRef.current === ordinal) return;
+    submittedOrdinalRef.current = ordinal;
+    clearAnswerTimer();
 
     if (answer && socketRef.current) {
       sendMsg(socketRef.current, {
@@ -258,16 +330,21 @@ export function InterviewScreen() {
 
     setSubmitEnabled(false);
     setMicEnabled(false);
-    setMicStatus('Submitting…');
+    setMicStatus(timeout ? 'Time is up. Submitting…' : 'Submitting…');
+  }
+
+  function handleSubmit() {
+    submitAnswer();
   }
 
   function handleAbort() {
     if (confirm('Cancel this interview? All progress will be lost.')) {
+      clearAnswerTimer();
       recog.stop();
       if ('speechSynthesis' in window) speechSynthesis.cancel();
       closeSocket(socketRef.current);
       socketRef.current = null;
-      navigate('/setup');
+      navigate(`/interview-cancelled${searchRef.current}`, { replace: true });
     }
   }
 
@@ -285,6 +362,38 @@ export function InterviewScreen() {
   }
 
   const live = (recog.finalTranscript + recog.interimTranscript).trim();
+  const timerValue = answerTimeRemainingSeconds == null
+    ? '—'
+    : formatRemainingTime(answerTimeRemainingSeconds);
+  const answerLimitSeconds = Math.max(1, Math.ceil(answerTimeLimitMs / 1000));
+  const timerPercent = answerTimeRemainingSeconds == null
+    ? 0
+    : Math.min(100, Math.max(0, (answerTimeRemainingSeconds / answerLimitSeconds) * 100));
+  const readyToAnswer = !questionDictating && micEnabled && !micStartedForQuestion && !recog.isListening;
+  const answerSubmitted = currentOrdinalRef.current != null
+    && submittedOrdinalRef.current === currentOrdinalRef.current;
+  const recording = micStartedForQuestion && !answerSubmitted && !followupThinking;
+  const endingSoon = answerTimeRemainingSeconds != null && answerTimeRemainingSeconds <= 10;
+  const timerPanelClass = [
+    'rounded-lg border p-4 shadow-sm transition-colors',
+    endingSoon
+      ? 'border-red-300 bg-red-50 text-red-800'
+      : 'border-indigo-100 bg-indigo-50 text-indigo-900',
+  ].join(' ');
+  const timerBarClass = [
+    'h-2 rounded-full transition-all duration-300',
+    endingSoon ? 'bg-red-600' : 'bg-indigo-600',
+  ].join(' ');
+  const submitButtonClass = [
+    'btn-primary',
+    endingSoon && submitEnabled ? 'submit-urgent' : '',
+  ].filter(Boolean).join(' ');
+  const submitLabel = endingSoon ? 'Submit now' : 'Submit & Next';
+  const showRepeatQuestion = !micStartedForQuestion && !answerSubmitted && !followupThinking;
+  const actionRowClass = [
+    'flex gap-3',
+    showRepeatQuestion ? 'justify-between' : 'justify-end',
+  ].join(' ');
   let transcriptText;
   let transcriptItalic;
   if (live) {
@@ -314,7 +423,7 @@ export function InterviewScreen() {
       </div>
 
       <div className="mb-6">
-        <div className="flex justify-between text-sm font-semibold mb-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-sm font-semibold mb-2">
           <span>{sectionLabel}</span>
           <span>{progressText}</span>
         </div>
@@ -326,7 +435,33 @@ export function InterviewScreen() {
         </div>
       </div>
 
-      <div className="bg-gray-50 rounded-xl p-6 mb-6 min-h-[140px] flex items-center">
+      <div className={timerPanelClass} aria-live="polite">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-xs uppercase font-bold text-current opacity-75">Time left</div>
+            <div className="text-3xl font-bold tabular-nums leading-none mt-1">{timerValue}</div>
+          </div>
+          <div className="text-sm font-medium sm:text-right">
+            {endingSoon
+              ? 'Submit now, or your answer will auto-save.'
+              : readyToAnswer
+                ? 'Click the microphone, then answer clearly.'
+                : recording
+                  ? 'Recording. Submit when you finish.'
+                  : answerSubmitted
+                    ? 'Answer submitted. Waiting for the next question.'
+                    : 'The timer starts after the question is read.'}
+          </div>
+        </div>
+        <div className="mt-4 h-2 w-full rounded-full bg-white/80">
+          <div
+            className={timerBarClass}
+            style={{ width: `${timerPercent}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="bg-gray-50 rounded-xl p-6 my-6 min-h-[140px] flex items-center">
         <div className="w-full">
           <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Interviewer asks:</div>
           <div className="text-lg leading-relaxed">{question}</div>
@@ -335,16 +470,30 @@ export function InterviewScreen() {
 
       <div className="text-center mb-6">
         <div className="text-sm text-gray-600 mb-3">{micStatus}</div>
-        <button
-          className={`bg-indigo-600 hover:bg-indigo-700 text-white rounded-full w-24 h-24 text-4xl shadow-lg transition-all ${recog.isListening ? 'pulse-mic' : ''}`}
-          disabled={!micEnabled}
-          onClick={handleMicToggle}
-        >
-          {recog.isListening ? '⏹️' : '🎤'}
-        </button>
-        {recog.isListening && (
-          <div className="mt-4">
-            {[0, 1, 2, 3, 4].map(i => <div key={i} className="wave-bar" />)}
+        {readyToAnswer && (
+          <button
+            className="ready-mic bg-indigo-600 hover:bg-indigo-700 text-white rounded-full w-24 h-24 text-4xl shadow-lg transition-all"
+            onClick={handleMicToggle}
+            aria-label="Start recording answer"
+          >
+            🎤
+          </button>
+        )}
+        {recording && (
+          <div className="inline-flex flex-col items-center rounded-xl border border-indigo-100 bg-indigo-50 px-6 py-4 text-indigo-900">
+            <div className="text-sm font-bold uppercase">Recording</div>
+            <div className="mt-3 h-10">
+              {[0, 1, 2, 3, 4].map(i => <div key={i} className="wave-bar" />)}
+            </div>
+          </div>
+        )}
+        {!readyToAnswer && !recording && (
+          <div className="inline-flex min-h-24 items-center rounded-xl border border-gray-200 bg-gray-50 px-6 py-4 text-sm font-medium text-gray-500">
+            {answerSubmitted
+              ? 'Answer submitted'
+              : questionDictating
+                ? 'Listening mode'
+                : 'Microphone will unlock after the question.'}
           </div>
         )}
       </div>
@@ -356,15 +505,17 @@ export function InterviewScreen() {
         </div>
       </div>
 
-      <div className="flex justify-between gap-3">
-        <button
-          className="btn-secondary"
-          onClick={() => { if (currentQuestionRef.current) speak(currentQuestionRef.current); }}
-        >
-          🔁 Repeat Question
-        </button>
-        <button className="btn-primary" disabled={!submitEnabled} onClick={handleSubmit}>
-          Submit &amp; Next →
+      <div className={actionRowClass}>
+        {showRepeatQuestion && (
+          <button
+            className="btn-secondary"
+            onClick={() => { if (currentQuestionRef.current) speak(currentQuestionRef.current); }}
+          >
+            🔁 Repeat Question
+          </button>
+        )}
+        <button className={submitButtonClass} disabled={!submitEnabled} onClick={handleSubmit}>
+          {submitLabel}
         </button>
       </div>
     </div>

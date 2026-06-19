@@ -101,7 +101,13 @@ pub struct ConfigSnapshot {
     pub behavioral_count: u16,
     pub include_intro: bool,
     pub pass_threshold: i16,
+    #[serde(default = "default_answer_time_limit_ms")]
+    pub answer_time_limit_ms: u32,
     pub behavioral_bank: serde_json::Value,
+}
+
+fn default_answer_time_limit_ms() -> u32 {
+    180_000
 }
 
 /// Stable intro question text per spec.

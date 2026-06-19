@@ -56,6 +56,7 @@ pub struct PerQuestionEntry {
     pub q: i16,
     pub section: &'static str,
     pub question: String,
+    pub answer: String,
     pub score: Option<i16>,
     pub feedback: String,
     /// Time the candidate took between question display and submit.

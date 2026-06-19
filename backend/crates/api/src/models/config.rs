@@ -26,6 +26,8 @@ pub struct HrConfig {
     pub pass_threshold: i16,
     #[serde(default)]
     pub voice_name: String,
+    #[serde(default)]
+    pub answer_time_limit_ms: u32,
 }
 
 impl HrConfig {
@@ -39,6 +41,7 @@ impl HrConfig {
             behavioral_bank: json!({}),
             pass_threshold: default_pass_threshold,
             voice_name: String::new(),
+            answer_time_limit_ms: defaults::DEFAULT_ANSWER_TIME_LIMIT_MS,
         }
     }
 
@@ -51,6 +54,14 @@ impl HrConfig {
         self.pass_threshold = self
             .pass_threshold
             .clamp(defaults::MIN_PASS_THRESHOLD, defaults::MAX_PASS_THRESHOLD);
+        self.answer_time_limit_ms = if self.answer_time_limit_ms == 0 {
+            defaults::DEFAULT_ANSWER_TIME_LIMIT_MS
+        } else {
+            self.answer_time_limit_ms.clamp(
+                defaults::MIN_ANSWER_TIME_LIMIT_MS,
+                defaults::MAX_ANSWER_TIME_LIMIT_MS,
+            )
+        };
         self
     }
 
@@ -222,6 +233,7 @@ mod tests {
             behavioral_bank: json!({ "Teamwork": ["How do you handle conflict?"] }),
             pass_threshold: 70,
             voice_name: String::new(),
+            answer_time_limit_ms: defaults::DEFAULT_ANSWER_TIME_LIMIT_MS,
         }
     }
 

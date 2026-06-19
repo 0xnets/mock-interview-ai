@@ -34,6 +34,7 @@ pub async fn get_by_code(
         role_title: session.role_title,
         expires_at: session.expires_at,
         shortcode: session.shortcode,
+        answer_time_limit_ms: session.answer_time_limit_ms,
     }))
 }
 
@@ -69,6 +70,7 @@ pub async fn issue_join_nonce(
         expires_at: session.expires_at,
         join_nonce: nonce,
         ws_path: "/v1/ws/interview",
+        answer_time_limit_ms: session.answer_time_limit_ms,
     }))
 }
 

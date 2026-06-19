@@ -8,6 +8,7 @@ export default defineConfig({
     'APP_',
     'LOCAL_',
     'DEFAULT_',
+    'ANSWER_',
     'SPEECH_',
     'VOICE_',
     'PDF_',

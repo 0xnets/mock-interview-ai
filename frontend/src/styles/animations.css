@@ -3,6 +3,27 @@
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.1); opacity: 0.7; }
 }
+.ready-mic {
+  animation: mic-ready 1.4s ease-in-out infinite;
+  position: relative;
+}
+.ready-mic::after {
+  animation: mic-ring 1.4s ease-out infinite;
+  border: 2px solid rgba(79, 70, 229, 0.35);
+  border-radius: 999px;
+  content: "";
+  inset: -10px;
+  pointer-events: none;
+  position: absolute;
+}
+@keyframes mic-ready {
+  0%, 100% { box-shadow: 0 12px 28px rgba(79, 70, 229, 0.28); transform: scale(1); }
+  50% { box-shadow: 0 16px 36px rgba(79, 70, 229, 0.42); transform: scale(1.05); }
+}
+@keyframes mic-ring {
+  0% { opacity: 0.85; transform: scale(0.9); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
 .wave-bar { display: inline-block; width: 4px; margin: 0 2px; background: #4f46e5; border-radius: 2px; animation: wave 1s ease-in-out infinite; }
 .wave-bar:nth-child(2) { animation-delay: 0.1s; }
 .wave-bar:nth-child(3) { animation-delay: 0.2s; }
@@ -11,5 +32,14 @@
 @keyframes wave {
   0%, 100% { height: 10px; }
   50% { height: 40px; }
+}
+.submit-urgent {
+  animation: submit-urgent 0.9s ease-in-out infinite;
+  background: #dc2626;
+}
+.submit-urgent:hover:not(:disabled) { background: #b91c1c; }
+@keyframes submit-urgent {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.32); transform: translateY(0); }
+  50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.12); transform: translateY(-1px); }
 }
 .score-ring { transform: rotate(-90deg); }

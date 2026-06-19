@@ -1,6 +1,8 @@
 //! Helpers for the mailer pipeline that runs off the outbox.
 
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+
 use serde_json::Value as JsonValue;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -43,6 +45,31 @@ pub async fn fetch_for_render(pool: &PgPool, session_id: Uuid) -> Result<ReportF
     .fetch_optional(pool)
     .await?;
     let row = row.ok_or(DbError::NotFound)?;
+    let mut raw_ai_output: JsonValue = row.try_get("raw_ai_output")?;
+    let answer_rows: Vec<(i16, Option<String>)> = sqlx::query_as(
+        r#"
+        SELECT q.ordinal, a.transcript_text
+        FROM questions q
+        LEFT JOIN answers a ON a.question_id = q.id
+        WHERE q.session_id = $1
+        ORDER BY
+            COALESCE(
+                (
+                    SELECT parent.ordinal
+                    FROM questions parent
+                    WHERE parent.id = q.parent_question_id
+                ),
+                q.ordinal
+            ),
+            CASE WHEN q.kind = 'followup' THEN 1 ELSE 0 END,
+            q.ordinal
+        "#,
+    )
+    .bind(session_id)
+    .fetch_all(pool)
+    .await?;
+    attach_answers_and_order_per_question(&mut raw_ai_output, answer_rows);
+
     Ok(ReportForRender {
         session_id: row.try_get::<Uuid, _>("id")?,
         candidate_name: row.try_get("candidate_name")?,
@@ -57,10 +84,57 @@ pub async fn fetch_for_render(pool: &PgPool, session_id: Uuid) -> Result<ReportF
         strengths: row.try_get("strengths")?,
         weaknesses: row.try_get("weaknesses")?,
         action_items: row.try_get("action_items")?,
-        raw_ai_output: row.try_get("raw_ai_output")?,
+        raw_ai_output,
         generated_at: row.try_get::<DateTime<Utc>, _>("generated_at")?,
         mail_status: row.try_get("mail_status")?,
     })
+}
+
+fn attach_answers_and_order_per_question(
+    raw_ai_output: &mut JsonValue,
+    answer_rows: Vec<(i16, Option<String>)>,
+) {
+    let answers: HashMap<i64, String> = answer_rows
+        .iter()
+        .filter_map(|(ordinal, answer)| answer.clone().map(|answer| (*ordinal as i64, answer)))
+        .collect();
+    let order: HashMap<i64, usize> = answer_rows
+        .iter()
+        .enumerate()
+        .map(|(idx, (ordinal, _))| (*ordinal as i64, idx))
+        .collect();
+    let Some(items) = raw_ai_output
+        .get_mut("per_question")
+        .and_then(|v| v.as_array_mut())
+    else {
+        return;
+    };
+
+    for item in items.iter_mut() {
+        let Some(obj) = item.as_object_mut() else {
+            continue;
+        };
+        let Some(q) = obj.get("q").and_then(|v| v.as_i64()) else {
+            continue;
+        };
+        let already_has_answer = obj
+            .get("answer")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.trim().is_empty());
+        if already_has_answer {
+            continue;
+        }
+        if let Some(answer) = answers.get(&q) {
+            obj.insert("answer".to_string(), JsonValue::String(answer.clone()));
+        }
+    }
+
+    items.sort_by_key(|item| {
+        item.get("q")
+            .and_then(|v| v.as_i64())
+            .and_then(|q| order.get(&q).copied())
+            .unwrap_or(usize::MAX)
+    });
 }
 
 pub async fn mark_mail_sent(pool: &PgPool, session_id: Uuid) -> Result<(), DbError> {
@@ -93,4 +167,37 @@ pub async fn mark_mail_failed(pool: &PgPool, session_id: Uuid, err: &str) -> Res
     .execute(pool)
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn attach_answers_and_orders_existing_report_questions() {
+        let mut raw = json!({
+            "per_question": [
+                { "q": 3, "question": "Follow-up?" },
+                { "q": 1, "question": "One?" },
+                { "q": 2, "question": "Two?", "answer": "already present" }
+            ]
+        });
+
+        attach_answers_and_order_per_question(
+            &mut raw,
+            vec![
+                (1, Some("first answer".to_string())),
+                (2, Some("replacement should not win".to_string())),
+                (3, Some("follow-up answer".to_string())),
+            ],
+        );
+
+        assert_eq!(raw["per_question"][0]["q"], 1);
+        assert_eq!(raw["per_question"][1]["q"], 2);
+        assert_eq!(raw["per_question"][2]["q"], 3);
+        assert_eq!(raw["per_question"][0]["answer"], "first answer");
+        assert_eq!(raw["per_question"][1]["answer"], "already present");
+        assert_eq!(raw["per_question"][2]["answer"], "follow-up answer");
+    }
 }

@@ -11,6 +11,7 @@ import { SetupScreen } from './screens/SetupScreen.jsx';
 import { AdminInvitesScreen } from './screens/AdminInvitesScreen.jsx';
 import { CandidateWelcomeScreen } from './screens/CandidateWelcomeScreen.jsx';
 import { InterviewScreen } from './screens/InterviewScreen.jsx';
+import { InterviewCancelledScreen } from './screens/InterviewCancelledScreen.jsx';
 import { ResultsScreen } from './screens/ResultsScreen.jsx';
 import { TranscriptScreen } from './screens/TranscriptScreen.jsx';
 import { readCandidateSessionFromURL } from './candidate/session-codec.js';
@@ -79,6 +80,7 @@ function Boot() {
             shortcode: loaded.shortcode || '',
             candidateName: loaded.session.candidate_name,
             role: loaded.session.role_title,
+            answerTimeLimitMs: Number(loaded.session.answer_time_limit_ms) || undefined,
             linkExpired: loaded.session.state === 'expired',
             results: null,
             reportPdfUrl: '',
@@ -120,6 +122,7 @@ export function App() {
               <Route path="/invites" element={<RequireAdmin><AdminInvitesScreen /></RequireAdmin>} />
               <Route path="/welcome" element={<RequireCandidateLink><CandidateWelcomeScreen /></RequireCandidateLink>} />
               <Route path="/interview" element={<RequireCandidateLink><InterviewScreen /></RequireCandidateLink>} />
+              <Route path="/interview-cancelled" element={<RequireCandidateLink><InterviewCancelledScreen /></RequireCandidateLink>} />
               <Route path="/results" element={<RequireCandidateLink><ResultsScreen /></RequireCandidateLink>} />
               <Route path="/transcript" element={<RequireCandidateLink><TranscriptScreen /></RequireCandidateLink>} />
               <Route path="*" element={<Navigate to="/" replace />} />
