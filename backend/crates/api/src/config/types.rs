@@ -23,6 +23,15 @@ pub struct Settings {
     pub anthropic_model_followup: String,
     pub anthropic_model_grading: String,
 
+    // Speech-to-text (AssemblyAI streaming, server-side proxy — always on)
+    pub assemblyai_api_key: String,
+    pub assemblyai_streaming_url: String,
+    pub assemblyai_sample_rate: u32,
+    pub assemblyai_speech_model: String,
+    pub assemblyai_format_turns: bool,
+    pub assemblyai_audio_channel_capacity: usize,
+    pub stt_event_channel_capacity: usize,
+
     // Priming worker
     pub prime_poll_interval_ms: u64,
     pub prime_batch_size: i64,

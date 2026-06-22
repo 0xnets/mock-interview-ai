@@ -21,6 +21,7 @@ use crate::infrastructure::signing::TranscriptSigner;
 use crate::realtime::followup;
 use crate::realtime::grade;
 use crate::realtime::protocol::{ClientMsg, ServerMsg};
+use crate::realtime::stt::{self, SttHandle, TranscriptEvent};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(20);
 
@@ -87,6 +88,13 @@ struct SessionActor {
     interims: HashMap<i16, String>,
     /// Chunks appended to the hash chain since the last checkpoint.
     pending_checkpoint_chunks: i32,
+    /// Active outbound AssemblyAI STT session, if the candidate is answering.
+    stt: Option<SttHandle>,
+    /// Sender cloned into each STT session; kept alive for the actor's lifetime
+    /// so `stt_rx` never reports all-senders-dropped.
+    stt_tx: tokio::sync::mpsc::Sender<TranscriptEvent>,
+    /// Transcript events flowing back from the active STT session.
+    stt_rx: tokio::sync::mpsc::Receiver<TranscriptEvent>,
 }
 
 impl SessionActor {
@@ -96,6 +104,7 @@ impl SessionActor {
         questions: Vec<QuestionRow>,
         deps: ActorDeps,
     ) -> Self {
+        let (stt_tx, stt_rx) = tokio::sync::mpsc::channel(deps.cfg.stt_event_channel_capacity);
         Self {
             socket,
             session,
@@ -105,6 +114,9 @@ impl SessionActor {
             finals: HashMap::new(),
             interims: HashMap::new(),
             pending_checkpoint_chunks: 0,
+            stt: None,
+            stt_tx,
+            stt_rx,
         }
     }
 
@@ -204,6 +216,9 @@ impl SessionActor {
                         return Ok(());
                     }
                 }
+                Some(ev) = self.stt_rx.recv() => {
+                    self.handle_transcript_event(ev).await?;
+                }
                 msg = self.socket.recv() => {
                     let Some(msg) = msg else { return Ok(()) };
                     let msg = match msg {
@@ -215,8 +230,11 @@ impl SessionActor {
                     };
                     match msg {
                         Message::Text(t) => self.handle_text(t.as_str()).await?,
-                        Message::Binary(_) => {
-                            // Phase 5 may add binary audio; ignore for now.
+                        Message::Binary(bytes) => {
+                            // Raw PCM mic audio for the active answer; forward to STT.
+                            if let Some(handle) = &self.stt {
+                                handle.send_audio(bytes.to_vec()).await;
+                            }
                         }
                         Message::Ping(payload) => {
                             let _ = self.socket.send(Message::Pong(payload)).await;
@@ -247,22 +265,12 @@ impl SessionActor {
         match parsed {
             ClientMsg::Hello { .. } => Ok(()),
             ClientMsg::Ping => Ok(()),
-            ClientMsg::Utterance {
-                ordinal,
-                text,
-                is_final,
-                ..
-            } => {
-                self.append_chunk(ordinal, &text, is_final).await;
-                if is_final {
-                    let buf = self.finals.entry(ordinal).or_default();
-                    if !buf.is_empty() {
-                        buf.push(' ');
-                    }
-                    buf.push_str(text.trim());
-                    self.interims.remove(&ordinal);
-                } else {
-                    self.interims.insert(ordinal, text);
+            ClientMsg::AudioStart { ordinal } => self.handle_audio_start(ordinal).await,
+            ClientMsg::AudioEnd { .. } => {
+                // Drop the handle: closes the audio channel, which makes the STT
+                // task flush + terminate. Trailing finals still arrive via stt_rx.
+                if let Some(handle) = self.stt.take() {
+                    handle.close();
                 }
                 Ok(())
             }
@@ -279,7 +287,76 @@ impl SessionActor {
         }
     }
 
+    /// Open an outbound STT session for the question being answered. No-op when
+    /// server-side STT is disabled; a connection failure is surfaced as a
+    /// non-terminal error so the candidate can retry the mic.
+    async fn handle_audio_start(&mut self, ordinal: i16) -> anyhow::Result<()> {
+        // Replace any stale session from a previous turn.
+        if let Some(handle) = self.stt.take() {
+            handle.close();
+        }
+        match stt::connect(&self.deps.cfg, ordinal, self.stt_tx.clone()).await {
+            Ok(handle) => {
+                self.stt = Some(handle);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!(error=%e, session_id=%self.session.id, ordinal, "STT connect failed");
+                self.send(ServerMsg::Error {
+                    code: "STT_UNAVAILABLE".into(),
+                    message: "Speech service is unavailable. Please try the microphone again."
+                        .into(),
+                    terminal: false,
+                })
+                .await
+            }
+        }
+    }
+
+    /// Fold a transcript fragment into the per-ordinal answer buffers. Finals are
+    /// appended; interims overwrite the current segment. Accumulates the
+    /// server-side transcript fragments emitted by the STT engine.
+    fn fold_transcript(&mut self, ordinal: i16, text: &str, is_final: bool) {
+        if is_final {
+            let buf = self.finals.entry(ordinal).or_default();
+            if !buf.is_empty() {
+                buf.push(' ');
+            }
+            buf.push_str(text.trim());
+            self.interims.remove(&ordinal);
+        } else {
+            self.interims.insert(ordinal, text.to_string());
+        }
+    }
+
+    /// Persist a server-side transcript fragment to the hash chain, fold it into
+    /// the answer buffers, and echo it to the client for live captions.
+    async fn handle_transcript_event(&mut self, ev: TranscriptEvent) -> anyhow::Result<()> {
+        self.append_chunk(ev.ordinal, &ev.text, ev.is_final).await;
+        self.fold_transcript(ev.ordinal, &ev.text, ev.is_final);
+        self.send(ServerMsg::Transcript {
+            ordinal: ev.ordinal,
+            text: ev.text,
+            is_final: ev.is_final,
+        })
+        .await
+    }
+
+    /// Pull any transcript events that have already arrived without blocking, so
+    /// a submit that races just behind the final transcript still captures it.
+    fn drain_pending_transcripts(&mut self) {
+        while let Ok(ev) = self.stt_rx.try_recv() {
+            self.fold_transcript(ev.ordinal, &ev.text, ev.is_final);
+        }
+    }
+
     async fn handle_submit(&mut self, ordinal: i16, duration_ms: i32) -> anyhow::Result<()> {
+        // Close any lingering STT session and absorb transcripts already queued.
+        if let Some(handle) = self.stt.take() {
+            handle.close();
+        }
+        self.drain_pending_transcripts();
+
         let Some(idx) = self.questions.iter().position(|q| q.ordinal == ordinal) else {
             return self
                 .send(ServerMsg::Error {
@@ -406,7 +483,7 @@ impl SessionActor {
             .find(|q| q.ordinal == ordinal)
             .map(|q| q.id)
         else {
-            tracing::debug!(ordinal, "utterance for unknown ordinal; chunk dropped");
+            tracing::debug!(ordinal, "transcript chunk for unknown ordinal; chunk dropped");
             return;
         };
         let client_ts_ms = chrono::Utc::now().timestamp_millis();
@@ -424,9 +501,6 @@ impl SessionActor {
                 self.pending_checkpoint_chunks += 1;
                 let label = if is_final { "true" } else { "false" };
                 crate::infrastructure::metrics::TRANSCRIPT_CHUNKS_TOTAL
-                    .with_label_values(&[label])
-                    .inc();
-                crate::infrastructure::metrics::WS_UTTERANCES_TOTAL
                     .with_label_values(&[label])
                     .inc();
                 self.checkpoint_if_due(false).await;

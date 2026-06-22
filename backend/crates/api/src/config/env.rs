@@ -47,6 +47,25 @@ impl Settings {
         let anthropic_model_grading = env::var("ANTHROPIC_MODEL_GRADING")
             .unwrap_or_else(|_| defaults::ANTHROPIC_MODEL_GRADING.into());
 
+        let assemblyai_api_key = env::var("ASSEMBLYAI_API_KEY")
+            .map_err(|_| anyhow!("ASSEMBLYAI_API_KEY must be set"))?;
+        let assemblyai_streaming_url = env::var("ASSEMBLYAI_STREAMING_URL")
+            .unwrap_or_else(|_| defaults::ASSEMBLYAI_STREAMING_URL.into());
+        let assemblyai_sample_rate =
+            env_u32("ASSEMBLYAI_SAMPLE_RATE", defaults::ASSEMBLYAI_SAMPLE_RATE)?;
+        let assemblyai_speech_model = env::var("ASSEMBLYAI_SPEECH_MODEL")
+            .unwrap_or_else(|_| defaults::ASSEMBLYAI_SPEECH_MODEL.into());
+        let assemblyai_format_turns =
+            env_bool("ASSEMBLYAI_FORMAT_TURNS", defaults::ASSEMBLYAI_FORMAT_TURNS);
+        let assemblyai_audio_channel_capacity = env_usize(
+            "ASSEMBLYAI_AUDIO_CHANNEL_CAPACITY",
+            defaults::ASSEMBLYAI_AUDIO_CHANNEL_CAPACITY,
+        )?;
+        let stt_event_channel_capacity = env_usize(
+            "STT_EVENT_CHANNEL_CAPACITY",
+            defaults::STT_EVENT_CHANNEL_CAPACITY,
+        )?;
+
         let prime_poll_interval_ms =
             env_u64("PRIME_POLL_INTERVAL_MS", defaults::PRIME_POLL_INTERVAL_MS)?;
         let prime_batch_size = env_i64("PRIME_BATCH_SIZE", defaults::PRIME_BATCH_SIZE)?;
@@ -145,6 +164,13 @@ impl Settings {
             anthropic_model_scoring,
             anthropic_model_followup,
             anthropic_model_grading,
+            assemblyai_api_key,
+            assemblyai_streaming_url,
+            assemblyai_sample_rate,
+            assemblyai_speech_model,
+            assemblyai_format_turns,
+            assemblyai_audio_channel_capacity,
+            stt_event_channel_capacity,
             prime_poll_interval_ms,
             prime_batch_size,
             feature_transcript_chain,
@@ -205,6 +231,15 @@ fn env_u32(key: &str, default: u32) -> Result<u32> {
 }
 
 fn env_u64(key: &str, default: u64) -> Result<u64> {
+    env::var(key)
+        .ok()
+        .map(|v| v.parse())
+        .transpose()
+        .with_context(|| format!("{key} must be a number"))
+        .map(|v| v.unwrap_or(default))
+}
+
+fn env_usize(key: &str, default: usize) -> Result<usize> {
     env::var(key)
         .ok()
         .map(|v| v.parse())

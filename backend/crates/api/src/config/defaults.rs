@@ -49,6 +49,14 @@ pub const ANTHROPIC_MODEL_SCORING: &str = "claude-sonnet-4-6";
 pub const ANTHROPIC_MODEL_FOLLOWUP: &str = "claude-sonnet-4-6";
 pub const ANTHROPIC_MODEL_GRADING: &str = "claude-haiku-4-5-20251001";
 
+// ─── Speech-to-text (AssemblyAI streaming) ─────────────────────────────────
+pub const ASSEMBLYAI_STREAMING_URL: &str = "wss://streaming.assemblyai.com/v3/ws";
+pub const ASSEMBLYAI_SAMPLE_RATE: u32 = 16_000;
+pub const ASSEMBLYAI_SPEECH_MODEL: &str = "u3-rt-pro";
+pub const ASSEMBLYAI_FORMAT_TURNS: bool = true;
+pub const ASSEMBLYAI_AUDIO_CHANNEL_CAPACITY: usize = 64;
+pub const STT_EVENT_CHANNEL_CAPACITY: usize = 256;
+
 // ─── Priming worker ────────────────────────────────────────────────────────
 pub const PRIME_POLL_INTERVAL_MS: u64 = 1_000;
 pub const PRIME_BATCH_SIZE: i64 = 4;

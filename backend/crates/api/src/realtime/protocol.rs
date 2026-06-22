@@ -32,6 +32,15 @@ pub enum ServerMsg {
         parent_ordinal: i16,
         text: String,
     },
+    /// Live transcript produced server-side by the STT engine. `is_final=false`
+    /// for interim text (overwrite the current segment), true when a segment is
+    /// finalized (append). Lets the client render captions without doing its own
+    /// speech recognition.
+    Transcript {
+        ordinal: i16,
+        text: String,
+        is_final: bool,
+    },
     /// State machine transition or transient indicator (e.g. "thinking").
     State { value: String },
     /// Last submit succeeded; the candidate should now hit POST /finalize.
@@ -47,27 +56,33 @@ pub enum ServerMsg {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "t", rename_all = "snake_case")]
-#[allow(dead_code)]
 pub enum ClientMsg {
     /// Optional handshake. Currently informational.
     Hello {
+        // Accepted off the wire for forward-compat; not read yet.
         #[serde(default)]
+        #[allow(dead_code)]
         client_version: Option<String>,
     },
-    /// Streaming STT chunk. `is_final=false` for interim, true for final.
-    /// Phase 4 stores them in memory only; Phase 5 will hash-chain to DB.
-    Utterance {
-        seq: u32,
+    /// Candidate started answering: begin streaming mic audio for `ordinal`.
+    /// The backend opens an outbound STT session; subsequent binary WS frames
+    /// are raw PCM audio for this ordinal.
+    AudioStart { ordinal: i16 },
+    /// Candidate stopped answering (manual stop or timer expiry): flush and
+    /// terminate the STT session for `ordinal`. The actor tracks a single live
+    /// STT session, so `ordinal` is accepted for protocol symmetry but not read.
+    AudioEnd {
+        #[allow(dead_code)]
         ordinal: i16,
-        text: String,
-        is_final: bool,
     },
     /// Candidate finished the current question.
     Submit { ordinal: i16, duration_ms: i32 },
     /// Candidate skipped (allowed only on primary questions, not follow-ups).
     Skip {
         ordinal: i16,
+        // Accepted off the wire but not persisted yet.
         #[serde(default)]
+        #[allow(dead_code)]
         reason: Option<String>,
     },
     /// Keep-alive. Server replies with a Pong frame, not a JSON message.

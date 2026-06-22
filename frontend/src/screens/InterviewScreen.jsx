@@ -3,9 +3,9 @@ import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAppState } from '../providers/AppStateProvider.jsx';
 import { useToast } from '../providers/ToastProvider.jsx';
 import { isAuthenticated } from '../app/auth-store.js';
-import { openInterviewSocket, sendMsg, closeSocket } from '../realtime/ws-client.js';
+import { openInterviewSocket, sendMsg, sendBinary, closeSocket } from '../realtime/ws-client.js';
 import { speak } from '../voice/speech-synthesis.js';
-import { useSpeechRecognition } from '../hooks/useSpeechRecognition.js';
+import { useStreamingStt } from '../hooks/useStreamingStt.js';
 import { finalizeInterview } from '../api/client.js';
 import { awaitReportReady } from '../reports/report-waiting.js';
 import { LoadingScreen } from './LoadingScreen.jsx';
@@ -58,9 +58,12 @@ export function InterviewScreen() {
   const [followupThinking, setFollowupThinking] = useState(false);
   const [questionDictating, setQuestionDictating] = useState(false);
   const [answerTimeRemainingSeconds, setAnswerTimeRemainingSeconds] = useState(null);
+  // Transcript text now comes from the backend STT proxy (ServerMsg `transcript`),
+  // not from a local speech engine.
+  const [transcriptFinal, setTranscriptFinal] = useState('');
+  const [transcriptInterim, setTranscriptInterim] = useState('');
 
   const socketRef = useRef(null);
-  const utteranceSeqRef = useRef(0);
   const currentOrdinalRef = useRef(null);
   const questionStartedAtRef = useRef(0);
   const totalQuestionsRef = useRef(0);
@@ -74,38 +77,65 @@ export function InterviewScreen() {
   const latestFinalTranscriptRef = useRef('');
   const latestInterimTranscriptRef = useRef('');
 
-  const recog = useSpeechRecognition({
-    onFinalChunk: (text) => {
+  const stt = useStreamingStt({
+    onStart: () => {
       if (socketRef.current && currentOrdinalRef.current != null) {
-        sendMsg(socketRef.current, {
-          t: 'utterance',
-          seq: ++utteranceSeqRef.current,
-          ordinal: currentOrdinalRef.current,
-          text,
-          is_final: true,
-        });
+        sendMsg(socketRef.current, { t: 'audio_start', ordinal: currentOrdinalRef.current });
+      }
+    },
+    onChunk: (buffer) => {
+      if (socketRef.current) sendBinary(socketRef.current, buffer);
+    },
+    onStop: () => {
+      if (socketRef.current && currentOrdinalRef.current != null) {
+        sendMsg(socketRef.current, { t: 'audio_end', ordinal: currentOrdinalRef.current });
       }
     },
     onError: (err) => {
       if (err === 'unsupported') {
-        toast.error("Your browser doesn't support speech recognition. Please use Chrome or Edge.");
-      } else if (err === 'no-speech') {
-        setMicStatus('No speech detected yet. Keep answering; Submit will unlock once speech is captured.');
+        toast.error("Your browser doesn't support microphone capture. Please use a recent Chrome, Edge, Firefox, or Safari.");
       } else if (err === 'not-allowed') {
         setMicStatus('Microphone permission denied. Allow it in browser settings and reload.');
+      } else {
+        setMicStatus('Could not start the microphone. Check your audio device and try again.');
       }
+      // Capture failed before we got audio — let the candidate click to retry.
+      setMicStartedForQuestion(false);
+      setSubmitEnabled(false);
     },
   });
 
-  // Enable Submit as soon as speech appears, including interim text.
-  useEffect(() => {
-    if ((recog.finalTranscript + recog.interimTranscript).trim().length > 0) setSubmitEnabled(true);
-  }, [recog.finalTranscript, recog.interimTranscript]);
+  function resetTranscript() {
+    latestFinalTranscriptRef.current = '';
+    latestInterimTranscriptRef.current = '';
+    setTranscriptFinal('');
+    setTranscriptInterim('');
+  }
 
-  useEffect(() => {
-    latestFinalTranscriptRef.current = recog.finalTranscript;
-    latestInterimTranscriptRef.current = recog.interimTranscript;
-  }, [recog.finalTranscript, recog.interimTranscript]);
+  // Apply a transcript fragment streamed back from the backend STT proxy:
+  // finals accumulate, interims overwrite the current segment.
+  function applyTranscript(msg) {
+    if (msg.ordinal != null && currentOrdinalRef.current != null && msg.ordinal !== currentOrdinalRef.current) {
+      return;
+    }
+    if (msg.is_final) {
+      const piece = (msg.text || '').trim();
+      if (piece) {
+        latestFinalTranscriptRef.current = (latestFinalTranscriptRef.current
+          ? `${latestFinalTranscriptRef.current} ${piece}`
+          : piece);
+        setTranscriptFinal(latestFinalTranscriptRef.current);
+      }
+      latestInterimTranscriptRef.current = '';
+      setTranscriptInterim('');
+    } else {
+      latestInterimTranscriptRef.current = msg.text || '';
+      setTranscriptInterim(latestInterimTranscriptRef.current);
+    }
+    if ((latestFinalTranscriptRef.current + latestInterimTranscriptRef.current).trim().length > 0) {
+      setSubmitEnabled(true);
+    }
+  }
 
   function clearAnswerTimer() {
     if (answerTimeoutRef.current) {
@@ -168,7 +198,8 @@ export function InterviewScreen() {
     setFollowupThinking(false);
     setQuestionDictating(true);
     setMicStatus('Listen to the question...');
-    recog.reset();
+    stt.stop();
+    resetTranscript();
 
     const preamble = computePreamble(section, ordinal, candidateNameRef.current, lastSectionRef.current);
     lastSectionRef.current = section;
@@ -199,7 +230,7 @@ export function InterviewScreen() {
 
   async function finalizeAndShow() {
     clearAnswerTimer();
-    recog.stop();
+    stt.stop();
     finalizedRef.current = true;
     setPhase('finalizing');
     try {
@@ -244,6 +275,9 @@ export function InterviewScreen() {
       case 'question':
       case 'followup':
         await renderQuestionFromServer(msg);
+        break;
+      case 'transcript':
+        applyTranscript(msg);
         break;
       case 'state':
         handleStateChange(msg.value);
@@ -298,17 +332,23 @@ export function InterviewScreen() {
   }, []);
 
   function handleMicToggle() {
-    if (!micEnabled || micStartedForQuestion || recog.isListening) return;
-    recog.toggle();
-    if (!recog.supported) return; // toggle() already alerted via onError
+    if (!micEnabled || micStartedForQuestion || stt.isListening) return;
+    if (!stt.supported) { stt.toggle(); return; } // toggle() alerts via onError
+    stt.toggle();
     setMicStartedForQuestion(true);
+    setSubmitEnabled(true);
     setMicStatus('Recording your answer. Submit when you are done.');
   }
 
   function submitAnswer({ allowEmpty = false, timeout = false } = {}) {
-    const answer = (latestFinalTranscriptRef.current + latestInterimTranscriptRef.current).trim();
-    if (!allowEmpty && !answer) { toast.warning('Please record an answer first.'); return; }
-    recog.stop();
+    // Stop capture first so the backend receives `audio_end` and flushes the
+    // final transcript before the `submit` frame is processed.
+    stt.stop();
+    const answer = (latestFinalTranscriptRef.current + ' ' + latestInterimTranscriptRef.current).trim();
+    if (!allowEmpty && !answer && !micStartedForQuestion) {
+      toast.warning('Please record an answer first.');
+      return;
+    }
 
     const ordinal = currentOrdinalRef.current;
     if (ordinal == null) return;
@@ -316,15 +356,6 @@ export function InterviewScreen() {
     submittedOrdinalRef.current = ordinal;
     clearAnswerTimer();
 
-    if (answer && socketRef.current) {
-      sendMsg(socketRef.current, {
-        t: 'utterance',
-        seq: ++utteranceSeqRef.current,
-        ordinal,
-        text: answer,
-        is_final: true,
-      });
-    }
     const duration = Math.max(0, Date.now() - questionStartedAtRef.current);
     sendMsg(socketRef.current, { t: 'submit', ordinal, duration_ms: duration });
 
@@ -340,7 +371,7 @@ export function InterviewScreen() {
   function handleAbort() {
     if (confirm('Cancel this interview? All progress will be lost.')) {
       clearAnswerTimer();
-      recog.stop();
+      stt.stop();
       if ('speechSynthesis' in window) speechSynthesis.cancel();
       closeSocket(socketRef.current);
       socketRef.current = null;
@@ -361,7 +392,7 @@ export function InterviewScreen() {
     );
   }
 
-  const live = (recog.finalTranscript + recog.interimTranscript).trim();
+  const live = `${transcriptFinal} ${transcriptInterim}`.trim();
   const timerValue = answerTimeRemainingSeconds == null
     ? '—'
     : formatRemainingTime(answerTimeRemainingSeconds);
@@ -369,7 +400,7 @@ export function InterviewScreen() {
   const timerPercent = answerTimeRemainingSeconds == null
     ? 0
     : Math.min(100, Math.max(0, (answerTimeRemainingSeconds / answerLimitSeconds) * 100));
-  const readyToAnswer = !questionDictating && micEnabled && !micStartedForQuestion && !recog.isListening;
+  const readyToAnswer = !questionDictating && micEnabled && !micStartedForQuestion && !stt.isListening;
   const answerSubmitted = currentOrdinalRef.current != null
     && submittedOrdinalRef.current === currentOrdinalRef.current;
   const recording = micStartedForQuestion && !answerSubmitted && !followupThinking;
@@ -402,7 +433,7 @@ export function InterviewScreen() {
   } else if (followupThinking) {
     transcriptText = 'Generating follow-up…';
     transcriptItalic = true;
-  } else if (recog.isListening) {
+  } else if (stt.isListening) {
     transcriptText = 'Listening...';
     transcriptItalic = true;
   } else {

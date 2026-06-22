@@ -39,6 +39,18 @@ export function sendMsg(socket, msg) {
   }
 }
 
+/// Send a raw binary frame (e.g. a PCM audio chunk) to the backend.
+export function sendBinary(socket, data) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+  try {
+    socket.send(data);
+    return true;
+  } catch (e) {
+    console.error('WS binary send failed', e);
+    return false;
+  }
+}
+
 /// Tell the backend the candidate is skipping the current question.
 export function sendSkip(socket, ordinal) {
   return sendMsg(socket, { t: 'skip', ordinal });

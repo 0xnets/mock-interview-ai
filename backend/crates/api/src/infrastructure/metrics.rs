@@ -122,11 +122,6 @@ pub static WS_SESSIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
         .expect("register ws_sessions_active")
 });
 
-pub static WS_UTTERANCES_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
-    register_int_counter_vec!("ws_utterances_total", "Utterances received", &["final"])
-        .expect("register ws_utterances_total")
-});
-
 pub static TRANSCRIPT_CHUNKS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "transcript_chunks_total",
@@ -184,7 +179,6 @@ pub fn init() {
     Lazy::force(&RETENTION_ROWS_AFFECTED_TOTAL);
     Lazy::force(&RETENTION_TICK_LATENCY_MS);
     Lazy::force(&WS_SESSIONS_ACTIVE);
-    Lazy::force(&WS_UTTERANCES_TOTAL);
     Lazy::force(&TRANSCRIPT_CHUNKS_TOTAL);
     Lazy::force(&PDF_RENDER_DURATION_MS);
     Lazy::force(&MAIL_SEND_DURATION_MS);
@@ -206,7 +200,6 @@ pub fn init() {
         Box::new(RETENTION_ROWS_AFFECTED_TOTAL.clone()),
         Box::new(RETENTION_TICK_LATENCY_MS.clone()),
         Box::new(WS_SESSIONS_ACTIVE.clone()),
-        Box::new(WS_UTTERANCES_TOTAL.clone()),
         Box::new(TRANSCRIPT_CHUNKS_TOTAL.clone()),
         Box::new(PDF_RENDER_DURATION_MS.clone()),
         Box::new(MAIL_SEND_DURATION_MS.clone()),

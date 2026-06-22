@@ -30,6 +30,7 @@ Step-by-step from a fresh AWS account to a working HTTPS deployment.
   - **ECR** — AWS-native, IAM-friendly, no external dep
   - **Docker Hub** — simple but has tighter rate limits on free tier
 - [ ] An [Anthropic API key](https://console.anthropic.com/) with budget for Sonnet 4.6 + Haiku 4.5
+- [ ] An [AssemblyAI API key](https://www.assemblyai.com/) for streaming speech-to-text — **required**; the API process refuses to start without it
 - [ ] A [Resend API key](https://resend.com/) for HR report emails
 - [ ] A dev machine with Docker installed (Linux, Mac, or WSL2)
 
@@ -283,6 +284,7 @@ Fill in **every value marked `replace-me-…`**. Most important:
 | `WEB_BASE_URL` | `https://interview.example.com` (must match `DOMAIN`) |
 | `CORS_ORIGINS` | `https://interview.example.com` (must match `DOMAIN`) |
 | `ANTHROPIC_API_KEY` | From the Anthropic console |
+| `ASSEMBLYAI_API_KEY` | From the AssemblyAI console — required; the API won't boot without it |
 | `RESEND_API_KEY` | From the Resend console |
 | `MAIL_FROM_ADDRESS` | A verified sender on your Resend domain |
 | `JWT_SIGNING_SECRET` | The `openssl rand -base64 48` value |
@@ -329,7 +331,7 @@ If Caddy logs `unable to get certificate`:
 
 ## Step 12 — First login
 
-Open `https://interview.example.com` in Chrome or Edge (Web Speech is unreliable in Safari/Firefox).
+Open `https://interview.example.com` in any modern browser. Speech-to-text now runs **server-side** (the browser captures and streams PCM audio over the interview WebSocket; the API proxies it to AssemblyAI), so the candidate's browser only needs microphone access, WebSocket, and AudioWorklet support — no reliance on the flaky Web Speech API. Microphone access requires the HTTPS origin you just set up.
 
 The first admin account is bootstrapped by migration `0002_bootstrap_default_account.sql`. Sign in, then go to **Invites** to create accounts for the rest of the team.
 
