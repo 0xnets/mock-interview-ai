@@ -1,0 +1,141 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    name: rust check + audit
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mockinterview
+          POSTGRES_PASSWORD: mockinterview
+          POSTGRES_DB: mockinterview
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mockinterview"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://mockinterview:mockinterview@localhost:5432/mockinterview
+      REDIS_URL: redis://localhost:6379
+      ANTHROPIC_API_KEY: dev-key
+      JWT_SIGNING_SECRET: replace-me-with-a-32-byte-secret-12345678
+      RUST_BACKTRACE: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            backend/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('backend/Cargo.lock') }}
+
+      - name: fmt
+        working-directory: backend
+        run: cargo fmt --all -- --check
+
+      - name: check
+        working-directory: backend
+        run: cargo check --workspace --all-targets
+
+      - name: clippy
+        working-directory: backend
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features postgres,rustls
+
+      - name: sqlx migrate
+        working-directory: backend
+        run: sqlx migrate run --source migrations
+
+      - name: sqlx prepare --check
+        working-directory: backend
+        run: |
+          # Phase 6: opt-in once we move to compile-time-checked queries. For
+          # now the workspace uses runtime queries, so this step is informational.
+          cargo sqlx prepare --check --workspace || echo "::warning::sqlx prepare not yet wired"
+
+      - name: cargo audit
+        run: |
+          cargo install --locked cargo-audit
+          cd backend && cargo audit
+
+      - name: cargo deny
+        run: |
+          cargo install --locked cargo-deny
+          cd backend && cargo deny check
+
+  k6-smoke:
+    name: k6 smoke
+    runs-on: ubuntu-latest
+    needs: rust
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mockinterview
+          POSTGRES_PASSWORD: mockinterview
+          POSTGRES_DB: mockinterview
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mockinterview"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://mockinterview:mockinterview@localhost:5432/mockinterview
+      ANTHROPIC_API_KEY: dev-key
+      JWT_SIGNING_SECRET: replace-me-with-a-32-byte-secret-12345678
+      FEATURE_SERVER_PDF: "false"
+      FEATURE_BACKEND_MAILER: "false"
+      FEATURE_RATE_LIMIT: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: build api
+        working-directory: backend
+        run: cargo build -p api --release
+      - name: run api in background
+        working-directory: backend
+        run: |
+          ./target/release/api &
+          echo $! > /tmp/api.pid
+          for i in {1..30}; do
+            sleep 1
+            curl -fsS http://127.0.0.1:8080/livez && break
+          done
+      - name: install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update && sudo apt-get install -y k6
+      - name: k6 smoke
+        run: k6 run backend/load/k6/smoke.js --env BASE=http://127.0.0.1:8080
+      - name: stop api
+        if: always()
+        run: kill "$(cat /tmp/api.pid)" || true

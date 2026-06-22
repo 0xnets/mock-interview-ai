@@ -1,0 +1,80 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# --- Security headers (apply to every response, incl. proxied API) ---
+	header {
+		# Force HTTPS for a year. Add `preload` only once you're committed —
+		# it's hard to undo and requires submitting to the HSTS preload list.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# This app captures audio for the interview; allow mic to itself only.
+		Permissions-Policy "geolocation=(), camera=(), microphone=(self)"
+		Cross-Origin-Opener-Policy "same-origin"
+		# Content Security Policy. Everything this SPA loads is same-origin:
+		# JS/CSS bundles, the /pcm-processor.js AudioWorklet, the pdf.js worker,
+		# REST + the wss interview socket (STT is proxied through the backend, so
+		# the browser never talks to AssemblyAI directly). No external origins.
+		#   style-src allows 'unsafe-inline' — required for runtime inline styles;
+		#   worker-src/blob: covers the pdf.js worker fallback;
+		#   if PDF parsing of image-heavy files ever fails, add 'wasm-unsafe-eval'
+		#   to script-src (pdf.js image codecs use WebAssembly).
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://{$DOMAIN}; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+		# Strip fingerprinting headers.
+		-Server
+		-X-Powered-By
+	}
+
+	# --- API + WebSocket ---
+	# Proxy everything under /v1 to the local Rust api. The WS route is
+	# /v1/ws/interview, so a single /v1/* match covers REST + the WebSocket
+	# upgrade (Caddy handles upgrade headers natively).
+	handle /v1/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# Liveness probe convenience
+	handle /healthz {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# --- Drop internet vulnerability scanners cheaply ---
+	# These paths (secrets files, CMS/framework exploits, dotfiles) never exist
+	# here, so close the connection instead of serving index.html, and skip
+	# logging the noise.
+	# NOTE: must not match /.well-known/acme-challenge/* — Caddy needs it for TLS.
+	@scanners path /.env* /.git* /.aws* /.docker* /.vscode* /.cursor* /.continue* /.npmrc /.pgpass /.DS_Store /.dev.vars /wp-* /xmlrpc.php /actuator* /telescope* /server-status* /v2/_catalog /config.json /config.yaml /config.yml /secrets.json /secrets.yaml /client_secret.json /api/config /@vite* /info.php /trace.axd /login.action *.php
+	handle @scanners {
+		log_skip
+		abort
+	}
+
+	# --- Static assets (content-hashed by Vite → safe to cache forever) ---
+	@assets path /assets/*
+	handle @assets {
+		root * /srv/dist
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# --- SPA shell ---
+	# index.html must never be cached, otherwise clients keep loading stale
+	# asset references after a deploy. Everything else falls back to the SPA.
+	handle {
+		root * /srv/dist
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format json
+		level INFO
+	}
+}

@@ -1,0 +1,100 @@
+/// JSDoc typedefs for backend response shapes. Pure documentation — no runtime code.
+
+/**
+ * @typedef {'hr'|'admin'|'super_admin'} Role
+ */
+
+/**
+ * @typedef {Object} Principal
+ * @property {string} account_id
+ * @property {Role} role
+ * @property {string} [display_name]
+ */
+
+/**
+ * @typedef {Object} LoginResponse
+ * @property {string} access_token
+ * @property {number} expires_in  Seconds until the access token expires.
+ * @property {string} account_id
+ * @property {Role} role
+ * @property {string|null} display_name
+ */
+
+/**
+ * @typedef {LoginResponse} RefreshResponse
+ */
+
+/**
+ * @typedef {Object} InviteCreateRequest
+ * @property {string} email
+ * @property {string} [display_name]
+ * @property {'hr'|'admin'} role
+ */
+
+/**
+ * @typedef {Object} InviteCreateResponse
+ * @property {string} account_id
+ * @property {string} token
+ * @property {string} accept_url
+ * @property {number} expires_in_hours
+ */
+
+/**
+ * @typedef {'active'|'expired'|'accepted'|'revoked'} InviteStatus
+ */
+
+/**
+ * @typedef {Object} InviteListItem
+ * @property {string} id
+ * @property {string} account_id
+ * @property {string} email
+ * @property {string|null} display_name
+ * @property {Role} role
+ * @property {'invited'|'active'|'disabled'} account_status
+ * @property {string} invited_by
+ * @property {string|null} invited_by_email
+ * @property {InviteStatus} status
+ * @property {string} expires_at
+ * @property {string|null} consumed_at
+ * @property {string|null} revoked_at
+ * @property {string} created_at
+ */
+
+/**
+ * @typedef {Object} InviteListResponse
+ * @property {InviteListItem[]} invites
+ */
+
+/**
+ * @typedef {Object} AcceptInviteRequest
+ * @property {string} token
+ * @property {string} password  Min 12 chars (backend rule).
+ */
+
+/**
+ * @typedef {Object} TranscriptChunk
+ * @property {number} seq
+ * @property {string} ordinal_or_section
+ * @property {string} canonical_row_b64
+ * @property {string} chain_hash_b64
+ */
+
+/**
+ * @typedef {Object} TranscriptCheckpoint
+ * @property {number} seq
+ * @property {string} chain_hash_b64
+ * @property {string} signature_b64
+ * @property {string} signed_at
+ */
+
+/**
+ * @typedef {Object} TranscriptExport
+ * @property {string} session_id
+ * @property {string} public_key_b64
+ * @property {string} canonical_row_format
+ * @property {string} checkpoint_signing_format
+ * @property {TranscriptChunk[]} chunks
+ * @property {TranscriptCheckpoint[]} checkpoints
+ */
+
+export {};

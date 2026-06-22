@@ -1,0 +1,101 @@
+.card { background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+.btn-primary { background: #4f46e5; color: white; padding: 12px 24px; border-radius: 10px; font-weight: 600; transition: all 0.2s; }
+.btn-primary:hover:not(:disabled) { background: #4338ca; transform: translateY(-1px); }
+.btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
+.btn-secondary { background: #e5e7eb; color: #374151; padding: 12px 24px; border-radius: 10px; font-weight: 600; transition: all 0.2s; }
+.btn-secondary:hover { background: #d1d5db; }
+.btn-secondary.is-active { background: #4f46e5; color: white; }
+.btn-secondary.is-active:hover { background: #4338ca; }
+.btn-danger { background: #ef4444; color: white; padding: 12px 24px; border-radius: 10px; font-weight: 600; transition: all 0.2s; }
+.btn-danger:hover { background: #dc2626; }
+.input, .textarea { width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px; transition: border-color 0.2s; }
+.input:focus, .textarea:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+.tab { padding: 10px 20px; border-bottom: 3px solid transparent; cursor: pointer; font-weight: 600; color: #6b7280; }
+.tab.active { color: #4f46e5; border-color: #4f46e5; }
+.badge-pass { background: #d1fae5; color: #065f46; }
+.badge-fail { background: #fee2e2; color: #991b1b; }
+.check-glyph {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  line-height: 1;
+  width: 28px;
+}
+.check-idle { background: #e5e7eb; color: #4b5563; }
+.check-running { background: #dbeafe; color: #1d4ed8; }
+.check-passed { background: #d1fae5; color: #047857; }
+.check-failed { background: #fee2e2; color: #b91c1c; }
+.toast-viewport {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  left: 16px;
+  pointer-events: none;
+  position: fixed;
+  right: 16px;
+  top: 16px;
+  z-index: 1000;
+}
+.toast {
+  align-items: flex-start;
+  border: 1px solid;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+  max-width: 420px;
+  padding: 12px 14px;
+  pointer-events: auto;
+  width: 100%;
+}
+.toast-content { flex: 1; min-width: 0; }
+.toast-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.toast-message {
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.toast-close {
+  align-items: center;
+  border-radius: 999px;
+  color: #4b5563;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 16px;
+  font-weight: 700;
+  height: 24px;
+  justify-content: center;
+  line-height: 1;
+  transition: background 0.2s, color 0.2s;
+  width: 24px;
+}
+.toast-close:hover { background: rgba(15, 23, 42, 0.08); color: #111827; }
+.toast-error { background: #fef2f2; border-color: #fecaca; }
+.toast-error .toast-title { color: #b91c1c; }
+.toast-warning { background: #fffbeb; border-color: #fde68a; }
+.toast-warning .toast-title { color: #b45309; }
+.toast-success { background: #ecfdf5; border-color: #a7f3d0; }
+.toast-success .toast-title { color: #047857; }
+.toast-info { background: #eff6ff; border-color: #bfdbfe; }
+.toast-info .toast-title { color: #1d4ed8; }
+
+@media (min-width: 640px) {
+  .toast-viewport {
+    left: auto;
+    width: 420px;
+  }
+}

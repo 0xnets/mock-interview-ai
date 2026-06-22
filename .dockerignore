@@ -1,0 +1,33 @@
+.git
+.gitignore
+.github
+.claude
+.codex
+.vscode
+.idea
+
+# Build outputs / caches
+frontend/node_modules
+frontend/dist
+backend/target
+target
+backend/.sqlx
+
+# Local env / secrets
+**/.env
+**/.env.*
+!**/example.env
+!**/.env.backend.example
+
+# Docs / dev tooling that bloats build context
+graphify-out
+**/graphify-out
+README.md
+AGENTS.md
+CLAUDE.md
+deploy/README.md
+
+# OS junk
+.DS_Store
+Thumbs.db
+*.swp
